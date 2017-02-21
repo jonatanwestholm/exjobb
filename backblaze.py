@@ -43,7 +43,7 @@ def melt_instance(args,dir_name,pattern,location):
 				f.write(pp.write_line(line + [args.linesep],args.elemsep))
 				f.close()
 
-				fail_location = 4
+				fail_location = 4 # column where failure is reported
 				if line[fail_location] == '1':
 					os.rename(target+serial_number+'.csv',target+serial_number+'_fail.csv')
 			else:
@@ -106,11 +106,11 @@ def main(args):
 				pad = max_length - np.size(dat[:,x])
 				dat_ext = np.concatenate((np.nan*np.ones(pad),dat[:,x]))
 				if re.findall("_fail",filename):
-					plt.plot(x_range,dat_ext,color='r')
+					plt.plot(x_range,dat_ext,'r',linewidth=5)
 				else:	
 					#print(filename)
 					#print(re.match("_fail",filename))
-					plt.plot(x_range,dat_ext,color='b')		
+					plt.plot(x_range,dat_ext,'b--')		
 
 			if not plotted:
 				print("nothing to plot for {0:d}".format(i))

@@ -30,6 +30,8 @@ def read_line(line,elemsep,mapping):
 		return []
 
 def greedy_numeric(string):
+	if not string:
+		return string
 	try:
 		return float(string)
 	except ValueError:
