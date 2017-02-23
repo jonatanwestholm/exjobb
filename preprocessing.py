@@ -43,18 +43,21 @@ def write_line(line,elemsep):
 def filter_wrt(data,key,value):
 	return data[data[:,key]==value,:]
 
+def filter_wrt_function(data,condition):
+	return [dat for dat in data if condition(dat)]
+
 explorable_types = ['list','dict','ndarray','void']
-def explore(data,branch_limit,expansion_limit,indent=0):
+def explore(data,branch_limit,expansion_limit,head=""):
 	#print(type(data))
 	#print(len(data))
 	try:
-		print('  '*indent + "{0:s}_{1:d}".format(type(data).__name__,len(data)))
+		print(head + "{0:s}_{1:d}".format(type(data).__name__,len(data)))
 		if len(data) < branch_limit and type(data).__name__ in explorable_types: #[list,dict,type(np.ndarray([])),type(np.void())]:
 			if isinstance(data,dict):
 				i = 0
 				for elem in data:
 					if i < expansion_limit:
-						explore(data[elem],branch_limit,expansion_limit,indent+1)
+						explore(data[elem],branch_limit,expansion_limit,head+"{0:s}  ".format(elem))
 					else:
 						break
 					i += 1
@@ -62,12 +65,12 @@ def explore(data,branch_limit,expansion_limit,indent=0):
 				i = 0
 				for elem in data:
 					if i < expansion_limit:
-						explore(elem,branch_limit,expansion_limit,indent+1)
+						explore(elem,branch_limit,expansion_limit,head+"{0:d}  ".format(i))
 					else:
 						break
 					i += 1	
 	except TypeError:
-		print('  '*indent + "{0:s}".format(type(data).__name__))
+		print(head + "{0:s}".format(type(data).__name__))
 
 def main(args):
 	filename = args.filename
@@ -97,7 +100,7 @@ def main(args):
 
 	elif datatype == "LAYERED":
 		data = scipy.io.loadmat(filename)
-		explore(data,11000,10)
+		explore(data,11000,25)
 			
 
 if __name__ == '__main__':

@@ -66,57 +66,61 @@ def main(args):
 			dat.remove([])
 		data = [np.array(dat) for dat in data]
 
-		max_length = max(map(lambda x: np.shape(x)[0],data))
+		if __name__ == '__main__':
+			max_length = max(map(lambda x: np.shape(x)[0],data))
 
-		x_range = list(range(-max_length+1,1))
-		#print(max_length)
-		#return
+			x_range = list(range(-max_length+1,1))
+			#print(max_length)
+			#return
 
-		#data = filter_wrt(data,0,2)
+			#data = filter_wrt(data,0,2)
 
-		#while True:
-		#	x = input('Which feature do you want to look at? ')
-		#	x = int(x)
-		i = 0
-		for x in range(5,np.shape(data[0])[1],2):
-			plotted = False
-			plt.figure()
-			plt.xlabel('Days before failure (red) or end of measurement (blue)')
-			try:
-				plt.title("S.M.A.R.T feature {0:d}: {1:s}".format(BB_SMART_order[i],smart_explanations.smart[BB_SMART_order[i]]))
-			except IndexError:
-				plt.title("Plot {0:d}".format(i))
-			except KeyError:
-				plt.title("S.M.A.R.T feature {0:d}".format(BB_SMART_order[i]))
+			#while True:
+			#	x = input('Which feature do you want to look at? ')
+			#	x = int(x)
+			i = 0
+			for x in range(5,np.shape(data[0])[1],2):
+				plotted = False
+				plt.figure()
+				plt.xlabel('Days before failure (red) or end of measurement (blue)')
+				try:
+					plt.title("S.M.A.R.T feature {0:d}: {1:s}".format(BB_SMART_order[i],smart_explanations.smart[BB_SMART_order[i]]))
+				except IndexError:
+					plt.title("Plot {0:d}".format(i))
+				except KeyError:
+					plt.title("S.M.A.R.T feature {0:d}".format(BB_SMART_order[i]))
+				
+				for dat,filename in zip(data,filenames):
+					#print(dat)
+					#if i == 45:
+					#	print("xx" + dat[0,x] + "xx")
+					if dat[0,x] == '':
+						#print('empty feature at {0:d}'.format(x))
+						continue
+					else:
+						plotted = True
+					#y = input('Which feature do you want to look at? ')
+					#y = int(y)
+
+					#for y in range(10):
+					#plt.plot(filter_wrt(data,0,y)[:,x])
+					pad = max_length - np.size(dat[:,x])
+					dat_ext = np.concatenate((np.nan*np.ones(pad),dat[:,x]))
+					if re.findall("_fail",filename):
+						plt.plot(x_range,dat_ext,'r',linewidth=5)
+					else:	
+						#print(filename)
+						#print(re.match("_fail",filename))
+						plt.plot(x_range,dat_ext,'b--')		
+
+				if not plotted:
+					print("nothing to plot for {0:d}".format(i))
+					plt.close()
+				i += 1
+			plt.show()
+		else:
+			return data
 			
-			for dat,filename in zip(data,filenames):
-				#print(dat)
-				#if i == 45:
-				#	print("xx" + dat[0,x] + "xx")
-				if dat[0,x] == '':
-					#print('empty feature at {0:d}'.format(x))
-					continue
-				else:
-					plotted = True
-				#y = input('Which feature do you want to look at? ')
-				#y = int(y)
-
-				#for y in range(10):
-				#plt.plot(filter_wrt(data,0,y)[:,x])
-				pad = max_length - np.size(dat[:,x])
-				dat_ext = np.concatenate((np.nan*np.ones(pad),dat[:,x]))
-				if re.findall("_fail",filename):
-					plt.plot(x_range,dat_ext,'r',linewidth=5)
-				else:	
-					#print(filename)
-					#print(re.match("_fail",filename))
-					plt.plot(x_range,dat_ext,'b--')		
-
-			if not plotted:
-				print("nothing to plot for {0:d}".format(i))
-				plt.close()
-			i += 1
-		plt.show()
 	elif datatype == "INSTANCE":
 		pattern = '[0-9-]*.csv'
 		#pattern = args.pattern
