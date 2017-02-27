@@ -12,6 +12,7 @@ import smart_explanations
 import preprocessing as pp
 
 BB_SMART_order = [1,2,3,4,5,7,9,10,11,12,13,15,22,183,184,187,188,189,190,191,192,193,194,195,196,197,198,199,200,201,220,222,223,224,225,226,240,241,242,250,251,252,254,255]
+normalized_idx = list(range(5,96,2))
 
 def melt_instance(args,dir_name,pattern,location):
 	target = args.target
@@ -118,7 +119,11 @@ def main(args):
 					plt.close()
 				i += 1
 			plt.show()
+
 		else:
+			data = [dat[:,normalized_idx] for dat in data]
+			data = pp.only_numeric(data)
+			data = [dat for dat in data if not np.nan in dat]
 			return data
 			
 	elif datatype == "INSTANCE":

@@ -31,11 +31,17 @@ def read_line(line,elemsep,mapping):
 
 def greedy_numeric(string):
 	if not string:
-		return string
+		return np.nan
 	try:
 		return float(string)
 	except ValueError:
-		return string
+		return np.nan
+
+def only_numeric(data):	
+	first_row = data[0][0,:]
+	is_numeric = np.array([not np.isnan(elem) for elem in first_row],dtype=bool)
+	only_num = [dat[:,is_numeric] for dat in data]
+	return only_num
 
 def write_line(line,elemsep):
 	return elemsep.join(line)

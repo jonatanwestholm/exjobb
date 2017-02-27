@@ -110,7 +110,7 @@ def main(args):
 			
 			data = []
 			for test in tests: #range(len(mat['mill'][0])):
-				print(test[2])
+				#print(test[2])
 				dat = []
 				for j in range(7,13): # collect features 7 to 12
 					dat.append(list(np.squeeze(test[j])))
