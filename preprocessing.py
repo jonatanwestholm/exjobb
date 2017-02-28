@@ -52,6 +52,33 @@ def filter_wrt(data,key,value):
 def filter_wrt_function(data,condition):
 	return [dat for dat in data if condition(dat)]
 
+def normalize(dat):
+	dat = np.array([feat - np.mean(feat) for feat in dat.T]).T
+	for i in range(np.shape(dat)[1]):
+		feat = dat[:,i]
+		sdev = np.std(feat)
+		if sdev:
+			dat[:,i] = feat/sdev # spreads the NaN
+	return dat
+
+def display_parallel(data,explanations):
+	j = 1
+	for dat in data:
+		dat = normalize(dat)
+		expl = []
+		plt.figure()
+		for i in range(np.shape(dat)[1]):
+			feat = dat[:,i]
+			if not np.isnan(feat[0]):
+				expl.append(explanations[i])
+				plt.plot(feat)
+
+		plt.legend(expl)
+		plt.title("Sample nbr {0:d}".format(j))
+		j += 1
+
+	plt.show()
+
 explorable_types = ['list','dict','ndarray','void']
 def explore(data,branch_limit,expansion_limit,head=""):
 	#print(type(data))

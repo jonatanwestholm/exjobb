@@ -95,7 +95,7 @@ def main(args):
 					#print(dat)
 					#if i == 45:
 					#	print("xx" + dat[0,x] + "xx")
-					if dat[0,x] == '':
+					if np.isnan(dat[0,x]):
 						#print('empty feature at {0:d}'.format(x))
 						continue
 					else:

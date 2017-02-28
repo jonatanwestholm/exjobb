@@ -130,7 +130,13 @@ def main(args):
 
 
 		if __name__ == '__main__':
-			display_sequential(data,explanations,run_to_fail,accumulative)
+			if datatype == "SEQUENTIAL":
+				display_sequential(data,explanations,run_to_fail,accumulative)
+			elif datatype == "PARALLEL":
+				if args.max_plots:
+					max_plots = int(args.max_plots)
+					data = data[:max_plots]
+				pp.display_parallel(data,explanations)
 		else:
 			return data
 
@@ -161,5 +167,6 @@ if __name__ == '__main__':
     parser.add_argument('-c','--readlines',dest = 'readlines',default="all",help='Number of lines to read')
     parser.add_argument('-e','--elemsep',dest = 'elemsep',default='\t',help='Element Separator')
     parser.add_argument('-l','--linesep',dest = 'linesep',default='\n',help='Line Separator')
+    parser.add_argument('-m','--max_plots',dest = 'max_plots',default='',help='Max number of unit plots (only for PARALLEL)')
     args = parser.parse_args()
     main(args)

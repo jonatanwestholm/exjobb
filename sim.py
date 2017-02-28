@@ -33,7 +33,6 @@ def varma_sim(C,A,T):
 	p = int(np.shape(A)[1]/k)
 	q = int(np.shape(C)[1]/k)
 
-
 	e = np.random.normal(0,1,[T, k])
 
 	# define LSS
@@ -59,7 +58,7 @@ def varma_sim(C,A,T):
 	y_t = np.zeros([k,1])
 	y = np.zeros([T,k])
 	for t in range(T):
-		e_t = e[t,:].reshape([k,1])
+		e_t = e[t,:].reshape((k,1))
 		#print(np.shape(e_t))
 		#print(np.shape(y_t))
 		U = np.concatenate([y_t,e_t])

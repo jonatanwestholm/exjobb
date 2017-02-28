@@ -27,14 +27,14 @@ def preprocess(args):
 	return data
 
 def split(args,data):
-	split_method = args.split_method.lower()
+	split_method = args.split_method
 	# split data into train and test
-	if split_method == "timewise":	
+	if split_method == "TIMEWISE":	
 		train_share = 0.6
 		test_share = 0.2
 		train_data = [dat[0:int(np.floor(train_share*np.shape(dat)[0])),:] for dat in data]
 		test_data = [dat[int(np.floor(train_share*np.shape(dat)[0])):int(np.floor((train_share+test_share)*np.shape(dat)[0])),:] for dat in data]
-	elif split_method == "unitwise":
+	elif split_method == "UNITWISE":
 		train_share = 0.6
 		test_share = 0.2
 		train_data = data[0:int(np.floor(train_share*len(data)))]
@@ -94,7 +94,7 @@ def test(train_data,test_data,models,settings,lables=[]):
 			reset_models(models)
 
 			# set states of models
-			if split_method == "timewise":
+			if split_method == "TIMEWISE":
 				update_models(tr_dat,models)
 
 			pred.append(predict_data(test_dat,models,k))
@@ -162,7 +162,7 @@ if __name__ == '__main__':
 
 	parser.add_argument('-m','--model',dest = 'model',default="TRIVIAL",help='Prediction model')
 	parser.add_argument('-k','--pred_k',dest = 'pred_k',default=1,help='How many steps of the future to predict')
-	parser.add_argument('-s','--split_method',dest = 'split_method',default="timewise",help='How to split data into training and test? (timewise,unitwise)')
+	parser.add_argument('-s','--split_method',dest = 'split_method',default="TIMEWISE",help='How to split data into training and test? (TIMEWISE,UNITWISE)')
 	parser.add_argument('-t','--test_type',dest = 'test_type',default="PREDICTION",help='Type of learning')
 	
 	args = parser.parse_args()
