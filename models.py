@@ -3,8 +3,8 @@
 
 import numpy as np
 
-def is_matrix(X):
-	if sum(np.array(np.shape(X)) > 1) > 1:
+def is_tensor(X,order=2):
+	if sum(np.array(np.shape(X)) > 1) == order:
 		return True
 	else:
 		return False
@@ -42,7 +42,7 @@ class Trivial(MTS_Model):
 
 class VARMA(MTS_Model):
 
-	def __init__(self,subgroup,orders,lamb):
+	def __init__(self,subgroup,orders):
 		self.subgroup = subgroup
 		k = len(subgroup)
 		self.k = k
@@ -50,26 +50,33 @@ class VARMA(MTS_Model):
 		self.q = orders[1]
 		self.A = np.zeros([k,k*self.p])
 		self.C = np.zeros([k,k*self.q])
-		self.Y = [[0]*self.p]*k
-		self.E = [[0]*self.q]*k
+		self.Y = [[0]*k]*self.p
+		self.E = [[0]*k]*self.q
+
+	def initiate_kalman(self,re,rw):
+		N = self.k*(self.p+self.q)
+		self.learners = [Kalman(N,re,rw) for i in range(self.k)]
+
+	def initiate_rls(self,Y,lamb):
 		self.lamb = lamb
-
-		print(self.A)
-
-	def initiate(self,Y):
 		N = len(Y)
 		k = self.k
 		p = self.p
 		q = self.q
-		X = np.zeros([N-p,k*(p+q)])
+		X = np.random.normal(0,1,[N-p,k*(p+q)])
+		#print(X)
 		for i in range(N-p):
 			X[i,:k*p] = Y[i:(i+p),:][::-1].T.reshape([1,k*p])
 		#X = [ for i in range(N-p)]
 		self.learners = [RLS(X,Y[p:N,j],self.lamb) for j in range(k)]
 
+		self.Y = [Y[i] for i in range(N-1,N-p-1,-1)]
+		#print(self.Y)
+
 	def update(self,y):
 		# simplest nontrivial estimation of e(t)
 		e = y - self.predict(1)
+		#print(e)
 
 		self.E.insert(0,e)
 		self.E = self.E[:-1]
@@ -77,40 +84,80 @@ class VARMA(MTS_Model):
 		self.Y.insert(0,y)
 		self.Y = self.Y[:-1]
 
+	'''
+	def make_state(self):
+		k = self.k
+		p = self.p
+		q = self.q
+		#print(self.Y)
+		#print(self.E)
+		if p:
+			yresh = np.reshape(self.Y,[1,k*p])
+		else:
+			yresh = [[]]
+		if q:
+			eresh = np.reshape(self.E,[1,k*q])
+		else:
+			eresh = [[]]
+		return np.concatenate([yresh,eresh],axis=1)
+
+	def make_transfer(self):
+		k = self.k
+		p = self.p
+		q = self.q
+		return np.concatenate(np.reshape(self.A,[1,k*k*p]), np.reshape(self.C,[1,k*k*q]))
+	'''
+	def make_column(self,data):
+		arr = np.concatenate([np.ravel(dat) for dat in data])
+		return arr.reshape([len(arr),1])
+
 	# would like to do a proper prediction here with polynomial division and everything
 	def predict(self,k):
 		if k == 1:
-			LSS_C = np.concatenate([self.A,self.C],axis=1)
-			LSS_X = np.concatenate(self.Y + self.E)
-			return np.matmul(LSS_C,LSS_X)
+			LSS_C = self.make_column([self.A,self.C]).T
+			LSS_X = self.make_column([self.Y,self.E])
+			#print(LSS_C)
+			return np.dot(LSS_C,LSS_X)
 		else:
 			print("Haven't done multistep yet!")
 
 	def learn_private(self,y):
 		#print(self.Y)
+		#print(self.E)
 		#print(self.Y + self.E)
-		x = np.concatenate(self.Y + self.E)
+		x = self.make_column([self.Y,self.E])
 		for i in range(self.k):
 			learner = self.learners[i]
-			learner.update(x,y[i]) 
+			theta = learner.update(y[i],x.T) 
 			#print(self.p)
 			#print(learner.theta)
 			#print(self.A[i,:])
 			#print(self.k)
 			#print(i)
 			if self.p:
-				self.A[i,:] = learner.theta[:self.p].T
+				self.A[i,:] = theta[:self.k*self.p].T
 			if self.q:
-				self.C[i,:] = learner.theta[self.p:]
+				self.C[i,:] = theta[self.k*self.p:].T
 		self.update(y)
-		print(self.A)
+
+		#print("A:")
+		#print(self.A)
+		#print("C:")
+		#print(self.C)
+		return self.A,self.C
 
 	def learn(self,Y):
-		if np.shape(Y)[0] > 1:
+		A_hist = []
+		C_hist = []
+		if is_tensor(Y,1):
 			for y in Y:
-				self.learn_private(y.T)
+				A,C = self.learn_private(y.T)
+				A_hist.append(list(A[0]))
+				C_hist.append(list(C[0]))
 		else:
 			self.learn_private(Y.T)	
+
+		return A_hist,C_hist
 
 # helps with learning
 # an object whose states is the weights of other models
@@ -121,6 +168,7 @@ class RLS:
 		# solve first as if they were instant
 		#print(np.shape(X))
 		self.dim = len(X[0])
+		#print(self.dim)
 		Y = Y.reshape([len(Y),1])
 		#print(np.shape(Y))
 
@@ -129,9 +177,12 @@ class RLS:
 
 		self.theta = np.linalg.lstsq(X,Y)[0]
 		#print(self.theta)
+		#print(X)
+		#print(np.dot(X.T,X))
 		self.P = np.linalg.inv(np.dot(X.T,X))
 
 	def update_private(self,x,y,lamb=0):
+		#print(x)
 		x = x.reshape([self.dim,1])
 		if not lamb:
 			lamb = self.lamb
@@ -152,16 +203,73 @@ class RLS:
 
 		return self.theta
 
-	def update(self,X,Y,block=True):
+	def update(self,Y,X,block=True):
 		if block:
 			lamb = 1
 		else:
 			lamb = self.lamb
-		if is_matrix(Y):
+		if is_tensor(Y,order=2):
 			self.update_private(X[0],Y[0]) # first forgetting round
 			for x,y in zip(X[1:],Y[1:]):
 				self.update_private(x,y,lamb) # then
 		else:
+			#print(X)
 			self.update_private(X,Y,lamb)
 
 		return self.theta
+
+class Kalman:
+	def __init__(self,N,re,rw,A=[],C=[],X=[]):
+		if not A:
+			A = np.eye(N)
+		if not C:
+			C = np.zeros([1,N])
+		if not X:
+			X = np.zeros([N,1])
+		
+		self.N = N
+
+		self.A = A
+		self.C = C
+		self.X = X
+
+		self.Re = self.init_r(re,N)
+		self.Rw = self.init_r(rw,1)
+
+		self.Rxx = self.Re
+		self.Ryy = self.Rw
+
+	def init_r(self,r,N):
+		if is_tensor(r,0):
+			R = np.eye(N)*r
+		elif is_tensor(r,1):
+			R = np.diag(r)
+		elif is_tensor(r,2):
+			R = r
+		return R
+
+	def set_variances(self,re,rw):
+		self.Re = self.init_r(re,self.N)
+		self.Rw = self.init_r(rw,1)		
+
+	def update(self,y,C=[],A=[]):
+		if C == []:
+			C = self.C
+		if A == []:
+			A = self.A
+
+		# inference
+		#print(np.shape(self.Rxx))
+		#print(np.shape(self.Ryy))
+		#print(np.shape(C))
+		#print(C.transpose())
+		K = np.dot(np.dot(self.Rxx,C.T),np.linalg.inv(self.Ryy))
+		self.X += np.dot(K,y-np.dot(C,self.X))
+
+		# update
+		eye = np.eye(self.N)
+		Rxx1 = np.dot(eye-np.dot(K,C),self.Rxx)
+		self.Rxx = np.dot(self.A,np.dot(Rxx1,self.A.T)) + self.Re
+		self.Ryy = np.dot(self.C,np.dot(Rxx1,self.C.T)) + self.Rw
+
+		return self.X
