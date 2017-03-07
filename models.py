@@ -53,6 +53,10 @@ class VARMA(MTS_Model):
 		self.Y = [[0]*k]*self.p
 		self.E = [[0]*k]*self.q
 
+	def reset(self):
+		self.Y = [[0]*self.k]*self.p
+		self.E = [[0]*self.k]*self.q
+
 	def initiate_kalman(self,re,rw):
 		N = self.k*(self.p+self.q)
 		self.learners = [Kalman(N,re,rw) for i in range(self.k)]
@@ -107,9 +111,13 @@ class VARMA(MTS_Model):
 		q = self.q
 		return np.concatenate(np.reshape(self.A,[1,k*k*p]), np.reshape(self.C,[1,k*k*q]))
 	'''
+
 	def make_column(self,data):
-		arr = np.concatenate([np.ravel(dat) for dat in data])
-		return arr.reshape([len(arr),1])
+		if is_tensor(data[0],1):
+			arr = np.concatenate([np.ravel(dat) for dat in data])
+			return arr.reshape([len(arr),1])
+		else:
+			return np.concatenate(data,axis=1)
 
 	# would like to do a proper prediction here with polynomial division and everything
 	def predict(self,k):
@@ -134,6 +142,7 @@ class VARMA(MTS_Model):
 			#print(self.A[i,:])
 			#print(self.k)
 			#print(i)
+			#print(theta)
 			if self.p:
 				self.A[i,:] = theta[:self.k*self.p].T
 			if self.q:
@@ -147,16 +156,18 @@ class VARMA(MTS_Model):
 		return self.A,self.C
 
 	def learn(self,Y):
-		A_hist = []
-		C_hist = []
-		if is_tensor(Y,1):
+		A_hist = np.zeros([1,self.k,self.k*self.p])
+		C_hist = np.zeros([1,self.k,self.k*self.q])
+		if is_tensor(Y,0+(self.k>1)):
+			self.learn_private(Y.T)				
+		else:
 			for y in Y:
 				A,C = self.learn_private(y.T)
-				A_hist.append(list(A[0]))
-				C_hist.append(list(C[0]))
-		else:
-			self.learn_private(Y.T)	
+				A_hist = np.concatenate([A_hist,[A]],axis=0)
+				C_hist = np.concatenate([C_hist,[C]],axis=0)
 
+		A_hist = A_hist[1:]
+		C_hist = C_hist[1:]
 		return A_hist,C_hist
 
 # helps with learning
@@ -259,17 +270,16 @@ class Kalman:
 			A = self.A
 
 		# inference
-		#print(np.shape(self.Rxx))
-		#print(np.shape(self.Ryy))
-		#print(np.shape(C))
-		#print(C.transpose())
+		#print(self.X)
 		K = np.dot(np.dot(self.Rxx,C.T),np.linalg.inv(self.Ryy))
-		self.X += np.dot(K,y-np.dot(C,self.X))
+		self.X = self.X + np.dot(K,y-np.dot(C,self.X))
+		#print(K)
+		#print(y)
 
 		# update
 		eye = np.eye(self.N)
 		Rxx1 = np.dot(eye-np.dot(K,C),self.Rxx)
 		self.Rxx = np.dot(self.A,np.dot(Rxx1,self.A.T)) + self.Re
-		self.Ryy = np.dot(self.C,np.dot(Rxx1,self.C.T)) + self.Rw
+		self.Ryy = (np.dot(self.C,np.dot(Rxx1,self.C.T)) + self.Rw).astype(dtype='float64') 
 
 		return self.X
