@@ -44,7 +44,10 @@ def only_numeric(data):
 	return only_num
 
 def write_line(line,elemsep):
-	return elemsep.join(line)
+	return elemsep.join([str(elem) for elem in line])
+
+def write_data(dat,linesep,elemsep):
+	return linesep.join([write_line(line,elemsep) for line in dat])
 
 def filter_wrt(data,key,value):
 	return data[data[:,key]==value,:]

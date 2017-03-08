@@ -1,9 +1,14 @@
 # sim.py
 # simulates different types of data and returns them
 
+import os
+import datetime
+import glob
 import numpy as np 
 import scipy.signal as ssignal
 import scipy.linalg as slinalg
+
+import preprocessing as pp
 
 class LSS:
 	def __init__(self,A,B,C):
@@ -95,3 +100,49 @@ def varma_sim(C,A,T):
 		y[t,:] = y_t.reshape((k,)) # this reshape thing is the dumbest
 
 	return y
+
+def mixed_varma(T,case,settings={}):
+	if case == 1:
+		A_1 = np.array([[0.5001,0.1,0.2],[0.1,0.5001,-0.2],[-0.1,0.2,0.5001]])
+		C_1 = np.array([[1,0,0],[0,1,0],[0,0,1]])
+		
+		y_1 = varma_sim(C_1,A_1,T)
+
+		return y_1
+
+	elif case == 2:
+		A_1 = np.array([[0.5001,0.1,0.2],[0.1,0.5001,-0.2],[-0.1,0.2,0.5001]])
+		C_1 = np.array([[1,0,0],[0,1,0],[0,0,1]])
+
+		A_2 = np.array([[0.2001,-0.3001,0.44,0.65,-0.1]])
+		C_2 = np.array([[1, 0.5001,0,-0.27]])
+
+		y_1 = varma_sim(C_1,A_1,T)
+		y_2 = varma_sim(C_2,A_2,T)
+
+		return np.concatenate([y_1,y_2],axis=1)
+
+	elif case == "random":
+		pass
+
+def read(args):
+	filenames = glob.glob(args.filename+"*.csv")
+	print(filenames)
+	data = [np.array(pp.read_file(filename,args.elemsep,args.linesep,"all")) for filename in filenames] 
+	return data	
+
+def write(data,args):
+	dirname = "../data/sim/"+args.model+"/"
+	os.chdir(dirname)
+
+	instance_name = str(datetime.datetime.now().time())
+	os.mkdir(instance_name)
+	os.chdir(instance_name)
+	# ok, now we're in
+
+	i = 1
+	for dat in data:
+		with open("{0:d}.csv".format(i),'w') as f:
+			f.write(pp.write_data(dat,args.linesep,args.elemsep))
+		i+=1
+

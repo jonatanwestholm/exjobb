@@ -11,42 +11,6 @@ import models
 def flatten(lst):
 	return [elem for sublist in lst for elem in sublist]
 
-def annealing(data,mod,re_series,rw_series,initiate=False):
-	A_hist = np.zeros([1,k,k*p])
-	C_hist = np.zeros([1,k,k*q])
-	step_length = int(len(data)/len(re_series))
-	if initiate:
-		mod.initiate_kalman(re_series[0],rw_series[0])
-	i = 0
-	for re,rw in zip(re_series,rw_series):
-		for learner in mod.learners:
-			learner.set_variances(re,rw)
-		A_h,C_h = mod.learn(data[i*step_length:(i+1)*step_length])
-		A_hist = np.concatenate([A_hist,A_h],axis=0)
-		C_hist = np.concatenate([C_hist,C_h],axis=0)
-		i+=1
-
-	A_hist = A_hist[1:]
-	C_hist = C_hist[1:]
-
-	return A_hist,C_hist
-
-def ruminate(data,mod,re_series,rw_series,iterations,meta_series):
-	A_hist = np.zeros([1,k,k*p])
-	C_hist = np.zeros([1,k,k*q])
-	mod.initiate_kalman(re_series[0],rw_series[0])
-	for i in range(iterations):
-		mod.reset()
-		start = 0 #random.randint(0,200)
-		A_h,C_h = annealing(data[start:],mod,meta_series[i]*re_series,rw_series)
-		A_hist = np.concatenate([A_hist,A_h],axis=0)
-		C_hist = np.concatenate([C_hist,C_h],axis=0)
-
-	A_hist = A_hist[1:]
-	C_hist = C_hist[1:]		
-		
-	return A_hist,C_hist
-
 parser = argparse.ArgumentParser()
 parser.add_argument('-c','--case',dest = 'case',default="",help='Name of case')
 args = parser.parse_args()
@@ -79,13 +43,17 @@ k = np.shape(A)[0]
 p = int(np.shape(A)[1]/k)
 q = int(np.shape(C)[1]/k)-1
 
+#print(k)
+#print(p)
+#print(q)
+
 #lamb = 0.97
 
 re = 0.001# state variance
 rw = 500 # output variance
 #bk = 500
 
-mod = models.VARMA(list(range(k)),[p,q])
+mod = models.VARMA([k,p,q])
 
 #mod.initiate_rls(Y[:10],lamb)
 #mod.initiate_kalman(re,rw)
@@ -107,8 +75,8 @@ iterations = int(10000/N)
 re_series = np.logspace(-1,-10,num_series)
 rw_series = 500*np.logspace(0,-1,num_series)
 meta_series = np.logspace(0,0,iterations)
-#A_hist,C_hist = annealing(Y,mod,re_series,rw_series,initiate=True)
-A_hist,C_hist = ruminate(Y,mod,re_series,rw_series,iterations,meta_series)
+#A_hist,C_hist = models.annealing(Y,mod,re_series,rw_series,initiate=True)
+A_hist,C_hist = mod.ruminate(Y,re_series,rw_series,iterations,meta_series)
 
 #print(np.shape(A_hist[:,,:]))
 N = np.shape(A_hist)[0]

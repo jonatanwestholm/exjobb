@@ -31,8 +31,8 @@ class MTS_Model:
 
 class Trivial(MTS_Model):
 
-	def __init__(self,subgroup):
-		self.subgroup = subgroup
+	def __init__(self):
+		pass
 
 	def update(self,data):
 		self.data = data	
@@ -42,12 +42,11 @@ class Trivial(MTS_Model):
 
 class VARMA(MTS_Model):
 
-	def __init__(self,subgroup,orders):
-		self.subgroup = subgroup
-		k = len(subgroup)
+	def __init__(self,orders):
+		k = orders[0]
 		self.k = k
-		self.p = orders[0]
-		self.q = orders[1]
+		self.p = orders[1]
+		self.q = orders[2]
 		self.A = np.zeros([k,k*self.p])
 		self.C = np.zeros([k,k*self.q])
 		self.Y = [[0]*k]*self.p
@@ -133,6 +132,8 @@ class VARMA(MTS_Model):
 		#print(self.Y)
 		#print(self.E)
 		#print(self.Y + self.E)
+		#print(self.Y)
+		#print(self.E)
 		x = self.make_column([self.Y,self.E])
 		for i in range(self.k):
 			learner = self.learners[i]
@@ -168,6 +169,50 @@ class VARMA(MTS_Model):
 
 		A_hist = A_hist[1:]
 		C_hist = C_hist[1:]
+		return A_hist,C_hist
+
+	def annealing(self,data,re_series,rw_series,initiate=False):
+		k = self.k
+		p = self.p
+		q = self.q
+
+		A_hist = np.zeros([1,k,k*p])
+		C_hist = np.zeros([1,k,k*q])
+		step_length = int(len(data)/len(re_series))
+		if initiate:
+			self.initiate_kalman(re_series[0],rw_series[0])
+		i = 0
+		for re,rw in zip(re_series,rw_series):
+			for learner in self.learners:
+				learner.set_variances(re,rw)
+			A_h,C_h = self.learn(data[i*step_length:(i+1)*step_length])
+			A_hist = np.concatenate([A_hist,A_h],axis=0)
+			C_hist = np.concatenate([C_hist,C_h],axis=0)
+			i+=1
+
+		A_hist = A_hist[1:]
+		C_hist = C_hist[1:]
+
+		return A_hist,C_hist
+
+	def ruminate(self,data,re_series,rw_series,iterations,meta_series):
+		k = self.k
+		p = self.p
+		q = self.q
+		
+		A_hist = np.zeros([1,k,k*p])
+		C_hist = np.zeros([1,k,k*q])
+		self.initiate_kalman(re_series[0],rw_series[0])
+		for i in range(iterations):
+			self.reset()
+			start = 0 #random.randint(0,200)
+			A_h,C_h = self.annealing(data[start:],meta_series[i]*re_series,rw_series)
+			A_hist = np.concatenate([A_hist,A_h],axis=0)
+			C_hist = np.concatenate([C_hist,C_h],axis=0)
+
+		A_hist = A_hist[1:]
+		C_hist = C_hist[1:]		
+			
 		return A_hist,C_hist
 
 # helps with learning
