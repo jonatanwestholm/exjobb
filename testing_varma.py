@@ -17,7 +17,7 @@ args = parser.parse_args()
 case = args.case
 
 if case == "AR":
-	A = np.array([[0.5,0,0.2]])
+	A = np.array([[0.5]])
 	C = np.array([[1]])
 
 elif case == "MA":
@@ -29,11 +29,15 @@ elif case == "ARMA":
 	C = np.array([[1, 0.5001,0,-0.27]])
 
 elif case == "VAR":
-	A = np.array([[0.5001,0.1,0.2],[0.1,0.5001,-0.2],[-0.1,0.2,0.5001]])
+	#A = np.array([[0.5001,0.1,0.2],[0.1,0.5001,-0.2],[-0.1,0.2,0.5001]])
+	#C = np.array([[1,0,0],[0,1,0],[0,0,1]])
+
+	A = np.array([[0.1,0.5001,0.2,0,-0.3,0.1],[-0.2,0.1,0.5001,0.1,0.3,-0.1],[0.5001,0.2,-0.1,0.4,0.3,-0.2]])
 	C = np.array([[1,0,0],[0,1,0],[0,0,1]])
 
 N = 2000
 Y = sim.varma_sim(C,A,N)
+#Y = sim.mixed_varma(N,"case3")
 
 #print(Y)
 
@@ -72,7 +76,7 @@ for i in range(1):
 
 num_series = 100
 iterations = int(10000/N)
-re_series = np.logspace(-1,-10,num_series)
+re_series = np.logspace(-1,-6,num_series)
 rw_series = 500*np.logspace(0,-1,num_series)
 meta_series = np.logspace(0,0,iterations)
 #A_hist,C_hist = models.annealing(Y,mod,re_series,rw_series,initiate=True)

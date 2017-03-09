@@ -2,8 +2,11 @@
 # implements hidden-state models for multivariate time series
 
 import numpy as np
+import copy
 
 def is_tensor(X,order=2):
+	#print(X)
+	#print(np.shape(X))
 	if sum(np.array(np.shape(X)) > 1) == order:
 		return True
 	else:
@@ -50,7 +53,10 @@ class VARMA(MTS_Model):
 		self.A = np.zeros([k,k*self.p])
 		self.C = np.zeros([k,k*self.q])
 		self.Y = [[0]*k]*self.p
-		self.E = [[0]*k]*self.q
+		if self.q:
+			self.E = [[0]*k]*self.q
+		else:
+			self.E = [[]]
 
 	def reset(self):
 		self.Y = [[0]*self.k]*self.p
@@ -77,15 +83,21 @@ class VARMA(MTS_Model):
 		#print(self.Y)
 
 	def update(self,y):
+		#print(type(self.Y[0]))
 		# simplest nontrivial estimation of e(t)
+		print(self.E)
 		e = y - self.predict(1)
 		#print(e)
 
 		self.E.insert(0,e)
 		self.E = self.E[:-1]
 
+		print(self.E)
+
 		self.Y.insert(0,y)
 		self.Y = self.Y[:-1]
+
+		#print(type(self.Y[0]))
 
 	'''
 	def make_state(self):
@@ -112,28 +124,43 @@ class VARMA(MTS_Model):
 	'''
 
 	def make_column(self,data):
-		if is_tensor(data[0],1):
+		if is_tensor(data[0],1) or is_tensor(data[0],0):
 			arr = np.concatenate([np.ravel(dat) for dat in data])
 			return arr.reshape([len(arr),1])
 		else:
 			return np.concatenate(data,axis=1)
 
 	# would like to do a proper prediction here with polynomial division and everything
-	def predict(self,k):
+	def predict(self,k,protected=True):
+		if not self.k:
+			return
 		if k == 1:
 			LSS_C = self.make_column([self.A,self.C]).T
 			LSS_X = self.make_column([self.Y,self.E])
-			#print(LSS_C)
+			'''
+			print("LSS_C")
+			print(LSS_C)
+			print("LSS_X")
+			print(LSS_X)
+			'''
 			return np.dot(LSS_C,LSS_X)
 		else:
-			print("Haven't done multistep yet!")
+			# wasteful indeed but simple and correct according to book (Jakobsson2015, 8.148)
+			if protected:
+				other = copy.deepcopy(self)
+				return other.predict(k,protected=False)
+			else:
+				y = self.predict(1)
+				#print(np.shape(y))
+				self.update(y) 
+				return self.predict(k-1,protected=False)
 
 	def learn_private(self,y):
 		#print(self.Y)
 		#print(self.E)
 		#print(self.Y + self.E)
-		#print(self.Y)
-		#print(self.E)
+		print(self.Y)
+		print(self.E)
 		x = self.make_column([self.Y,self.E])
 		for i in range(self.k):
 			learner = self.learners[i]

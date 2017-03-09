@@ -27,7 +27,7 @@ def preprocess(args):
 		if args.filename:
 			data = sim.read(args)
 		else:
-			data = [sim.mixed_varma(1000,2) for i in range(10)]
+			data = [sim.mixed_varma(1000,"case3") for i in range(50)]
 			sim.write(data,args)
 	else:
 		print("No matching dataset!")
@@ -43,10 +43,10 @@ def split(args,data):
 		train_data = [dat[0:int(np.floor(train_share*np.shape(dat)[0])),:] for dat in data]
 		test_data = [dat[int(np.floor(train_share*np.shape(dat)[0])):int(np.floor((train_share+test_share)*np.shape(dat)[0])),:] for dat in data]
 	elif split_method == "UNITWISE":
-		train_share = 0.6
+		train_share = 0.2
 		test_share = 0.2
 		train_data = data[0:int(np.floor(train_share*len(data)))]
-		test_data = data[int(np.floor(train_share*len(data))):int(np.floor((train_share+test_share)*len(data)))]
+		test_data = data[int(np.floor(train_share*len(data))):int(np.floor((train_share+test_share)*len(data)))]		
 
 	return train_data,test_data
 
@@ -56,6 +56,7 @@ def candidate_generate(train_data,subgroups,args):
 	gen = args.generation.upper()
 	N = np.shape(train_data[0])[1]
 	#print(N)
+	#print(np.shape(train_data[0]))
 	if gen == "TRIVIAL":
 		return list(range(N))
 	elif gen == "RANDOM":
@@ -63,7 +64,7 @@ def candidate_generate(train_data,subgroups,args):
 		while True:
 			cand = list(np.where(np.random.randint(0,2,N))[0])
 			#print(cand)
-			if len(cand) > 1:
+			if len(cand) > 2:
 				return cand
 	elif gen == "LINCORR":
 		pass
@@ -73,20 +74,21 @@ def candidate_generate(train_data,subgroups,args):
 # settings = {'type': 'type of learning model'}
 # returns models = [obj]
 def train(data,settings):
+	print(np.shape(data[0]))
 	N = np.shape(data[0])[1]
 
 	train_type = settings['type']
 	if train_type == "TRIVIAL":
 		mod = Models.Trivial()
 	elif train_type == "VARMA":
-		orders = [N,1,0]
+		orders = [N,2,0]
 		mod = Models.VARMA(orders)
 		i = 0
 		for dat in data:
 			#print(np.shape(dat))num_series = 100
 			num_series = 10
 			#iterations = int(10000/N)
-			re_series = np.logspace(-1,-10,num_series)
+			re_series = np.logspace(-1,-6,num_series)
 			rw_series = 500*np.logspace(0,-1,num_series)
 			#meta_series = np.logspace(0,0,iterations)
 			mod.annealing(dat,re_series,rw_series,initiate= i==0)
@@ -115,7 +117,13 @@ def predict_data(dat,models,k):
 		pred_array = np.zeros_like(sample)
 		for mod in models:
 			mod.update(sample[mod.subgroup])
-			pred_array[mod.subgroup] = mod.predict(k)
+			#print(mod.predict(k))
+			#print("before")
+			#print(mod.Y)
+			y = mod.predict(k)
+			#print(y)
+			pred_array[mod.subgroup] = y #mod.predict(k)
+			#print(mod.Y)
 
 		pred_mat[i,:] = pred_array
 		i += 1
@@ -148,21 +156,23 @@ def test(train_data,test_data,models,settings,lables=[]):
 	return pred
 
 # outputs performance scores, plots
-def evaluate(pred,gt):
+def evaluate(pred,gt,evaluate_on):
 	rmses = []
 	for pred_mat,gt_mat in zip(pred,gt):
 		#print(pred_mat)
+		pred_mat = pred_mat[:,evaluate_on]
+		gt_mat = gt_mat[:,evaluate_on]
 		fro = np.linalg.norm(pred_mat-gt_mat)
 		rms = fro/np.sqrt(np.size(pred_mat))
 		rmses.append(rms)
 		print("RMS norm of error: {0:.3f}".format(rms))
-		'''
+		
 		for i in range(np.shape(pred_mat)[1]):
 			plt.figure()
-			plt.plot(pred_mat[:,i],'r')
-			plt.plot(gt_mat[:,i],'b')
+			plt.plot(pred_mat[:,i],'b')
+			plt.plot(gt_mat[:,i],'r')
 		plt.show()
-		'''
+		
 	rmses = np.array(rmses)
 	print("Avg: {0:.3f}, Min: {1:.3f}, Max: {2:.3f}".format(np.mean(rmses),np.min(rmses),np.max(rmses)))
 
@@ -177,26 +187,36 @@ def subgroup_learn(train_data,subgroup,args):
 	return mod
 
 ## Subgroup Selection
-def subgroup_select(train_data,test_data,models,args):
+def subgroup_select(train_data,test_data,models,remains,args):
+	N = np.shape(test_data[0])[1]
+	if args.subgroup_only_eval:
+		evaluate_on = remaining_features(N,remains)
+		remains = []
+	else:
+		evaluate_on = list(range(N))
 	pred_k = int(args.pred_k)
 	test_settings = {'type': args.test_type,'args': args,'k':pred_k}
 	#
-	pred = test(train_data,[test_dat[:-pred_k] for test_dat in test_data],models,test_settings)
+	pred = test(train_data,[test_dat[:-pred_k] for test_dat in test_data],models+remains,test_settings)
 	gt = [test_dat[pred_k:] for test_dat in test_data]
 
-	score = evaluate(pred,gt)
+	score = evaluate(pred,gt,evaluate_on)
 
 	return True
+
+def remaining_features(N,models):
+	remains = list(range(N))
+	for mod in models:
+		for feature in mod.subgroup:
+			remains.remove(feature)
+	return remains
 
 def baseline_remain(train_data,models,baseline,args):
 	args = copy.copy(args)
 	args.model = baseline
 
 	N = np.shape(train_data[0])[1]
-	remains = list(range(N))
-	for mod in models:
-		for feature in mod.subgroup:
-			remains.remove(feature)
+	remains = remaining_features(N,models)
 
 	return subgroup_learn(train_data,remains,args)
 
@@ -204,12 +224,12 @@ def subgroup(data,args):
 	train_data,test_data = split(args,data)
 
 	models = []
-	for i in range(10):
+	for i in range(1):
 		cand = candidate_generate(train_data,models,args)
 		print(cand)
 		mod = subgroup_learn(train_data,cand,args)
-		rem = baseline_remain(train_data,models+[mod],"TRIVIAL",args)
-		if subgroup_select(train_data,test_data,models+[mod,rem],args):
+		rem = baseline_remain(train_data,models+[mod],"VARMA",args)
+		if subgroup_select(train_data,test_data,models+[mod],[rem],args):
 			pass
 			#subgroups.append(mod)
 
@@ -236,6 +256,7 @@ if __name__ == '__main__':
 	parser.add_argument('-s','--split_method',dest = 'split_method',default="UNITWISE",help='How to split data into training and test? (TIMEWISE,UNITWISE)')
 	parser.add_argument('-t','--test_type',dest = 'test_type',default="PREDICTION",help='Type of learning')
 	parser.add_argument('-g','--generation',dest = 'generation',default="TRIVIAL",help='Type of candidate generation')
+	parser.add_argument('--subgroup_only_eval',dest = 'subgroup_only_eval',default=False,action="store_true",help='Only compare performance of subgroups')
 	
 	args = parser.parse_args()
 	main(args)

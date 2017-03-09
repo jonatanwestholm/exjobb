@@ -102,20 +102,32 @@ def varma_sim(C,A,T):
 	return y
 
 def mixed_varma(T,case,settings={}):
-	if case == 1:
+	if case == "case1": #VARMA(3,1,0)
 		A_1 = np.array([[0.5001,0.1,0.2],[0.1,0.5001,-0.2],[-0.1,0.2,0.5001]])
 		C_1 = np.array([[1,0,0],[0,1,0],[0,0,1]])
-		
+	
 		y_1 = varma_sim(C_1,A_1,T)
 
 		return y_1
 
-	elif case == 2:
-		A_1 = np.array([[0.5001,0.1,0.2],[0.1,0.5001,-0.2],[-0.1,0.2,0.5001]])
+	elif case == "case2": #VARMA(3,1,0) + ARMA(1,0)
+		A_1 = np.array([[0.1,0.5001,0.2],[-0.2,0.1,0.5001],[0.5001,0.2,-0.1]])
 		C_1 = np.array([[1,0,0],[0,1,0],[0,0,1]])
 
-		A_2 = np.array([[0.2001,-0.3001,0.44,0.65,-0.1]])
-		C_2 = np.array([[1, 0.5001,0,-0.27]])
+		A_2 = np.array([[0.500]])
+		C_2 = np.array([[1]])
+
+		y_1 = varma_sim(C_1,A_1,T)
+		y_2 = varma_sim(C_2,A_2,T)
+
+		return np.concatenate([y_1,y_2],axis=1)
+		
+	elif case == "case3":
+		A_1 = np.array([[0.1,0.5001,0.2,0,-0.3,0.1],[-0.2,0.1,0.5001,0.1,0.3,-0.1],[0.5001,0.2,-0.1,0.4,0.3,-0.2]])
+		C_1 = np.array([[1,0,0],[0,1,0],[0,0,1]])
+
+		A_2 = np.array([[0.500]])
+		C_2 = np.array([[1]])
 
 		y_1 = varma_sim(C_1,A_1,T)
 		y_2 = varma_sim(C_2,A_2,T)
