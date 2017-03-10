@@ -53,11 +53,8 @@ class VARMA(MTS_Model):
 		self.A = np.zeros([k,k*self.p])
 		self.C = np.zeros([k,k*self.q])
 		self.Y = [[0]*k]*self.p
-		if self.q:
-			self.E = [[0]*k]*self.q
-		else:
-			self.E = [[]]
-
+		self.E = [[0]*k]*self.q
+		
 	def reset(self):
 		self.Y = [[0]*self.k]*self.p
 		self.E = [[0]*self.k]*self.q
@@ -85,58 +82,45 @@ class VARMA(MTS_Model):
 	def update(self,y):
 		#print(type(self.Y[0]))
 		# simplest nontrivial estimation of e(t)
-		print(self.E)
+		#print(self.E)
 		e = y - self.predict(1)
 		#print(e)
 
 		self.E.insert(0,e)
 		self.E = self.E[:-1]
 
-		print(self.E)
+		#print(self.E)
 
 		self.Y.insert(0,y)
 		self.Y = self.Y[:-1]
 
 		#print(type(self.Y[0]))
 
-	'''
-	def make_state(self):
-		k = self.k
-		p = self.p
-		q = self.q
-		#print(self.Y)
-		#print(self.E)
-		if p:
-			yresh = np.reshape(self.Y,[1,k*p])
-		else:
-			yresh = [[]]
-		if q:
-			eresh = np.reshape(self.E,[1,k*q])
-		else:
-			eresh = [[]]
-		return np.concatenate([yresh,eresh],axis=1)
-
-	def make_transfer(self):
-		k = self.k
-		p = self.p
-		q = self.q
-		return np.concatenate(np.reshape(self.A,[1,k*k*p]), np.reshape(self.C,[1,k*k*q]))
-	'''
-
 	def make_column(self,data):
-		if is_tensor(data[0],1) or is_tensor(data[0],0):
-			arr = np.concatenate([np.ravel(dat) for dat in data])
-			return arr.reshape([len(arr),1])
-		else:
-			return np.concatenate(data,axis=1)
+		#if is_tensor(data[0],1) or is_tensor(data[0],0):
+		arr = np.concatenate([np.ravel(dat) for dat in data])
+		return arr.reshape([len(arr),1])
+		#else:
+		#	return np.concatenate(data,axis=1)
+
+	def make_block(self,data):
+		return np.concatenate(data,axis=1)
 
 	# would like to do a proper prediction here with polynomial division and everything
 	def predict(self,k,protected=True):
 		if not self.k:
 			return
 		if k == 1:
-			LSS_C = self.make_column([self.A,self.C]).T
+			LSS_C = self.make_block([self.A,self.C])
+			#print(LSS_C)
+			'''
+			print("Y:")
+			print(self.Y)
+			print("E:")
+			print(self.E)
+			'''
 			LSS_X = self.make_column([self.Y,self.E])
+			#print(LSS_X)
 			'''
 			print("LSS_C")
 			print(LSS_C)
@@ -150,18 +134,28 @@ class VARMA(MTS_Model):
 				other = copy.deepcopy(self)
 				return other.predict(k,protected=False)
 			else:
-				y = self.predict(1)
+				y = self.predict(1).T[0]
 				#print(np.shape(y))
 				self.update(y) 
+				'''
+				print("Y:")
+				print(self.Y)
+				print("E:")
+				print(self.E)
+				'''
 				return self.predict(k-1,protected=False)
 
 	def learn_private(self,y):
 		#print(self.Y)
 		#print(self.E)
 		#print(self.Y + self.E)
-		print(self.Y)
-		print(self.E)
-		x = self.make_column([self.Y,self.E])
+		#print(self.Y)
+		#print(self.E)
+		if self.q:
+			x = self.make_column([self.Y,self.E])
+		else:
+			x = self.make_column([self.Y])
+			#print(x.T)
 		for i in range(self.k):
 			learner = self.learners[i]
 			theta = learner.update(y[i],x.T) 
@@ -244,6 +238,61 @@ class VARMA(MTS_Model):
 
 # helps with learning
 # an object whose states is the weights of other models
+class Kalman:
+	def __init__(self,N,re,rw,A=[],C=[],X=[]):
+		if not A:
+			A = np.eye(N)
+		if not C:
+			C = np.zeros([1,N])
+		if not X:
+			X = np.zeros([N,1])
+		
+		self.N = N
+
+		self.A = A
+		self.C = C
+		self.X = X
+
+		self.Re = self.init_r(re,N)
+		self.Rw = self.init_r(rw,1)
+
+		self.Rxx = self.Re
+		self.Ryy = self.Rw
+
+	def init_r(self,r,N):
+		if is_tensor(r,0):
+			R = np.eye(N)*r
+		elif is_tensor(r,1):
+			R = np.diag(r)
+		elif is_tensor(r,2):
+			R = r
+		return R
+
+	def set_variances(self,re,rw):
+		self.Re = self.init_r(re,self.N)
+		self.Rw = self.init_r(rw,1)		
+
+	def update(self,y,C=[],A=[]):
+		if C == []:
+			C = self.C
+		if A == []:
+			A = self.A
+
+		# inference
+		#print(self.X)
+		K = np.dot(np.dot(self.Rxx,C.T),np.linalg.inv(self.Ryy))
+		self.X = self.X + np.dot(K,y-np.dot(C,self.X))
+		#print(K)
+		#print(y)
+
+		# update
+		eye = np.eye(self.N)
+		Rxx1 = np.dot(eye-np.dot(K,C),self.Rxx)
+		self.Rxx = np.dot(self.A,np.dot(Rxx1,self.A.T)) + self.Re
+		self.Ryy = (np.dot(self.C,np.dot(Rxx1,self.C.T)) + self.Rw).astype(dtype='float64') 
+
+		return self.X
+'''
 class RLS:
 	def __init__(self,X,Y,lamb):
 		self.lamb = lamb
@@ -300,58 +349,4 @@ class RLS:
 			self.update_private(X,Y,lamb)
 
 		return self.theta
-
-class Kalman:
-	def __init__(self,N,re,rw,A=[],C=[],X=[]):
-		if not A:
-			A = np.eye(N)
-		if not C:
-			C = np.zeros([1,N])
-		if not X:
-			X = np.zeros([N,1])
-		
-		self.N = N
-
-		self.A = A
-		self.C = C
-		self.X = X
-
-		self.Re = self.init_r(re,N)
-		self.Rw = self.init_r(rw,1)
-
-		self.Rxx = self.Re
-		self.Ryy = self.Rw
-
-	def init_r(self,r,N):
-		if is_tensor(r,0):
-			R = np.eye(N)*r
-		elif is_tensor(r,1):
-			R = np.diag(r)
-		elif is_tensor(r,2):
-			R = r
-		return R
-
-	def set_variances(self,re,rw):
-		self.Re = self.init_r(re,self.N)
-		self.Rw = self.init_r(rw,1)		
-
-	def update(self,y,C=[],A=[]):
-		if C == []:
-			C = self.C
-		if A == []:
-			A = self.A
-
-		# inference
-		#print(self.X)
-		K = np.dot(np.dot(self.Rxx,C.T),np.linalg.inv(self.Ryy))
-		self.X = self.X + np.dot(K,y-np.dot(C,self.X))
-		#print(K)
-		#print(y)
-
-		# update
-		eye = np.eye(self.N)
-		Rxx1 = np.dot(eye-np.dot(K,C),self.Rxx)
-		self.Rxx = np.dot(self.A,np.dot(Rxx1,self.A.T)) + self.Re
-		self.Ryy = (np.dot(self.C,np.dot(Rxx1,self.C.T)) + self.Rw).astype(dtype='float64') 
-
-		return self.X
+'''

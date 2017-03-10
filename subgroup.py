@@ -13,6 +13,8 @@ import models as Models
 import nasa
 import backblaze
 
+## Preprocessing
+
 # returns data = [np.array()]
 def preprocess(args):
 	dataset = args.dataset.upper()
@@ -21,13 +23,16 @@ def preprocess(args):
 		data = nasa.main(args)
 	elif dataset == "BACKBLAZE":
 		data = backblaze.main(args)
-	elif dataset == "ARMA_SIM":
-		data = sim.arma_sim(np.array([1]),np.array([1,0.5,-0.2]),1000,num=5)
+	#elif dataset == "ARMA_SIM":
+	#	data = sim.arma_sim(np.array([1]),np.array([1,0.5,-0.2]),1000,num=5)
 	elif dataset == "VARMA_SIM":
 		if args.filename:
 			data = sim.read(args)
 		else:
-			data = [sim.mixed_varma(1000,"case3") for i in range(50)]
+			num_timepoints = args.settings["num_timepoints"]
+			num_samples = args.settings["num_samples"]
+			case = args.settings["case"]
+			data = [sim.mixed_varma(num_timepoints,case) for i in range(num_samples)]
 			sim.write(data,args)
 	else:
 		print("No matching dataset!")
@@ -53,49 +58,58 @@ def split(args,data):
 ## Candidate Generation
 
 def candidate_generate(train_data,subgroups,args):
-	gen = args.generation.upper()
 	N = np.shape(train_data[0])[1]
-	#print(N)
-	#print(np.shape(train_data[0]))
+
+	gen = args.generation.upper()
 	if gen == "TRIVIAL":
 		return list(range(N))
 	elif gen == "RANDOM":
 		# take out random 
 		while True:
+			# generate random subset
 			cand = list(np.where(np.random.randint(0,2,N))[0])
-			#print(cand)
-			if len(cand) > 2:
+			length = len(cand)
+			if args.settings["min_subgroup_length"] <= length and length <= args.settings["max_subgroup_length"]:
 				return cand
+
 	elif gen == "LINCORR":
 		pass
 
 ## Training
 
-# settings = {'type': 'type of learning model'}
 # returns models = [obj]
-def train(data,settings):
+def train(data,args):
 	print(np.shape(data[0]))
 	N = np.shape(data[0])[1]
 
-	train_type = settings['type']
+	train_type = args.model
 	if train_type == "TRIVIAL":
 		mod = Models.Trivial()
 	elif train_type == "VARMA":
-		orders = [N,2,0]
+		p = args.settings["VARMA_p"]
+		q = args.settings["VARMA_q"]
+		orders = [N,p,q]
 		mod = Models.VARMA(orders)
 		i = 0
 		for dat in data:
 			#print(np.shape(dat))num_series = 100
-			num_series = 10
+			#num_series = 10
 			#iterations = int(10000/N)
-			re_series = np.logspace(-1,-6,num_series)
-			rw_series = 500*np.logspace(0,-1,num_series)
+			re_series = args.settings["re_series"] #np.logspace(-1,-6,num_series)
+			rw_series = args.settings["rw_series"] #500*np.logspace(0,-1,num_series)
 			#meta_series = np.logspace(0,0,iterations)
 			mod.annealing(dat,re_series,rw_series,initiate= i==0)
 			mod.reset()
 			i += 1
 		print(mod.A)
 		print(mod.C)
+
+	return mod
+
+def subgroup_learn(train_data,subgroup,args):
+	#print(type(subgroup))
+	mod = train([dat[:,subgroup] for dat in train_data],args)
+	mod.subgroup = subgroup
 
 	return mod
 
@@ -109,32 +123,39 @@ def update_models(data,models):
 	for mod in models:
 		mod.update_array(data[:,mod.subgroup])
 
+def remaining_features(N,models):
+	remains = list(range(N))
+	for mod in models:
+		for feature in mod.subgroup:
+			remains.remove(feature)
+	return remains
+
+def baseline_remain(train_data,models,baseline,args):
+	args = copy.copy(args)
+	args.model = baseline
+
+	N = np.shape(train_data[0])[1]
+	remains = remaining_features(N,models)
+
+	return subgroup_learn(train_data,remains,args)
+
 def predict_data(dat,models,k):
 	pred_mat = np.zeros_like(dat)
 	i = 0
 	for sample in dat:
-		#print(sample)
 		pred_array = np.zeros_like(sample)
 		for mod in models:
 			mod.update(sample[mod.subgroup])
-			#print(mod.predict(k))
-			#print("before")
-			#print(mod.Y)
-			y = mod.predict(k)
-			#print(y)
-			pred_array[mod.subgroup] = y #mod.predict(k)
-			#print(mod.Y)
+			pred_array[mod.subgroup] = mod.predict(k)
 
 		pred_mat[i,:] = pred_array
 		i += 1
 	return pred_mat
 
-# settings = {'type': 'type of test','k': 'prediction length','err_measure':'error measure'}
 # returns either: predicted series or predicted classes/scores
-def test(train_data,test_data,models,settings,lables=[]):
-	args = settings['args']
-	test_type = settings['type']
-	k = settings['k']
+def test(train_data,test_data,models,args,lables=[]):
+	test_type = args.test_type
+	k = int(args.pred_k)
 	split_method = args.split_method
 
 	pred = []
@@ -166,59 +187,61 @@ def evaluate(pred,gt,evaluate_on):
 		rms = fro/np.sqrt(np.size(pred_mat))
 		rmses.append(rms)
 		print("RMS norm of error: {0:.3f}".format(rms))
-		
+		'''
 		for i in range(np.shape(pred_mat)[1]):
 			plt.figure()
 			plt.plot(pred_mat[:,i],'b')
 			plt.plot(gt_mat[:,i],'r')
 		plt.show()
+		'''
 		
 	rmses = np.array(rmses)
 	print("Avg: {0:.3f}, Min: {1:.3f}, Max: {2:.3f}".format(np.mean(rmses),np.min(rmses),np.max(rmses)))
 
 	return 0
 
-def subgroup_learn(train_data,subgroup,args):
-	train_settings = {'type': args.model}
-	#print(type(subgroup))
-	mod = train([dat[:,subgroup] for dat in train_data],train_settings)
-	mod.subgroup = subgroup
+def subgroup_score(train_data,test_data,mod,args):
+	pred_k = int(args.pred_k)
+	#
+	pred = test(train_data,[test_dat[:-pred_k] for test_dat in test_data],[mod],args)
+	gt = [test_dat[pred_k:] for test_dat in test_data]
 
-	return mod
+	score = evaluate(pred,gt,mod.subgroup)
 
-## Subgroup Selection
-def subgroup_select(train_data,test_data,models,remains,args):
+	return score
+
+def evaluate_all(train_data,test_data,models,remains,args):
 	N = np.shape(test_data[0])[1]
 	if args.subgroup_only_eval:
 		evaluate_on = remaining_features(N,remains)
 		remains = []
 	else:
 		evaluate_on = list(range(N))
+
 	pred_k = int(args.pred_k)
-	test_settings = {'type': args.test_type,'args': args,'k':pred_k}
 	#
-	pred = test(train_data,[test_dat[:-pred_k] for test_dat in test_data],models+remains,test_settings)
+	pred = test(train_data,[test_dat[:-pred_k] for test_dat in test_data],models+remains,args)
 	gt = [test_dat[pred_k:] for test_dat in test_data]
 
 	score = evaluate(pred,gt,evaluate_on)
 
-	return True
+	return score
 
-def remaining_features(N,models):
-	remains = list(range(N))
-	for mod in models:
-		for feature in mod.subgroup:
-			remains.remove(feature)
-	return remains
+def subgroup_select(mod,modelsa,args):
 
-def baseline_remain(train_data,models,baseline,args):
-	args = copy.copy(args)
-	args.model = baseline
+	return False
 
-	N = np.shape(train_data[0])[1]
-	remains = remaining_features(N,models)
+## Main
+def settings(args):
+	num_series = 10
 
-	return subgroup_learn(train_data,remains,args)
+	settings = {"min_subgroup_length": 3, "max_subgroup_length": 5,  # general
+				"VARMA_p": 2, "VARMA_q": 0, # VARMA orders
+				"re_series": np.logspace(-1,-6,num_series), "rw_series": 500*np.logspace(0,-1,num_series), # VARMA training
+				"num_timepoints": 1000, "num_samples": 50, "case": "case3" # VARMA sim
+				}
+
+	args.settings = settings
 
 def subgroup(data,args):
 	train_data,test_data = split(args,data)
@@ -228,12 +251,15 @@ def subgroup(data,args):
 		cand = candidate_generate(train_data,models,args)
 		print(cand)
 		mod = subgroup_learn(train_data,cand,args)
+		mod.score = subgroup_score(train_data,test_data,mod,args)
+		if subgroup_select(mod,models,args):
+			models.append(mod)
 		rem = baseline_remain(train_data,models+[mod],"VARMA",args)
-		if subgroup_select(train_data,test_data,models+[mod],[rem],args):
-			pass
-			#subgroups.append(mod)
+
+		evaluate_all(train_data,test_data,models+[mod],[rem],args)
 
 def main(args):
+	settings(args)
 	data = preprocess(args)
 
 	# subgroup learning

@@ -22,17 +22,18 @@ if case == "AR":
 
 elif case == "MA":
 	A = np.array([[]])
-	C = np.array([[1, 0.5, -0.2,0.3]])
+	C = np.array([[1, 0.5001, -0.2,0.3]])
 
 elif case == "ARMA":
 	A = np.array([[0.2001,-0.3001,0.44,0.65,-0.1]])
 	C = np.array([[1, 0.5001,0,-0.27]])
 
-elif case == "VAR":
-	#A = np.array([[0.5001,0.1,0.2],[0.1,0.5001,-0.2],[-0.1,0.2,0.5001]])
-	#C = np.array([[1,0,0],[0,1,0],[0,0,1]])
+elif case == "VAR1":
+	A = np.array([[0.5001,0.1,0.2],[0.1,0.5001,-0.2],[-0.1,0.2,0.5001]])
+	C = np.array([[1,0,0],[0,1,0],[0,0,1]])
 
-	A = np.array([[0.1,0.5001,0.2,0,-0.3,0.1],[-0.2,0.1,0.5001,0.1,0.3,-0.1],[0.5001,0.2,-0.1,0.4,0.3,-0.2]])
+elif case == "VAR2":
+	A = np.array([[0.1,0.5001,0.2,0,-0.3,-0.1],[-0.2,0.15,0.5001,0.1,0.3,-0.1],[0.5001,0.2,-0.1,0.4,0.3,-0.2]])
 	C = np.array([[1,0,0],[0,1,0],[0,0,1]])
 
 N = 2000
@@ -75,8 +76,8 @@ for i in range(1):
 '''
 
 num_series = 100
-iterations = int(10000/N)
-re_series = np.logspace(-1,-6,num_series)
+iterations = 1 #int(10000/N)
+re_series = np.logspace(-1,-10,num_series)
 rw_series = 500*np.logspace(0,-1,num_series)
 meta_series = np.logspace(0,0,iterations)
 #A_hist,C_hist = models.annealing(Y,mod,re_series,rw_series,initiate=True)
@@ -92,7 +93,8 @@ if "AR" in case:
 			plt.plot(A_hist[:,j,i])
 		for i in range(k*p):
 			plt.plot([0,N],[-A[j][i]]*2)
-		legends = flatten([["a({0:d},{1:d})".format(jx+1,ix+1) for ix in range(p)] for jx in range(k)]) + flatten([["a({0:d},{1:d})_gt".format(jx+1,ix+1) for ix in range(p)] for jx in range(k)])
+		legends = flatten([["a({0:d},{1:d})".format(jx+1,ix+1) for jx in range(k)] for ix in range(p)]) + flatten([["a({0:d},{1:d})_gt".format(jx+1,ix+1) for ix in range(p)] for jx in range(k)])
+		#print([["a({0:d},{1:d})_gt".format(jx+1,ix+1) for ix in range(p)] for jx in range(k)])
 		plt.legend(legends) #["a{0:d}".format(i+1) for i in range(k*p)]+["a{0:d}_gt".format(i+1) for i in range(p)])
 if "MA" in case:
 	plt.figure()
