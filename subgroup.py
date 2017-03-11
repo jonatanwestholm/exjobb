@@ -13,16 +13,23 @@ import models as Models
 import nasa
 import backblaze
 
+# auxilliary
+
+# it is decided that this should always work
+def num_features(dat):
+	return np.shape(dat)[1]
+
 ## Preprocessing
 
 # returns data = [np.array()]
+# preprocessing is dataset specific so it's handled in separate scripts
 def preprocess(args):
 	dataset = args.dataset.upper()
 
 	if dataset in ["TURBOFAN","MILL","IGBT"]:
-		data = nasa.main(args)
+		data,explanations = nasa.main(args)
 	elif dataset == "BACKBLAZE":
-		data = backblaze.main(args)
+		data,explanations = backblaze.main(args)
 	#elif dataset == "ARMA_SIM":
 	#	data = sim.arma_sim(np.array([1]),np.array([1,0.5,-0.2]),1000,num=5)
 	elif dataset == "VARMA_SIM":
@@ -34,14 +41,19 @@ def preprocess(args):
 			case = args.settings["case"]
 			data = [sim.mixed_varma(num_timepoints,case) for i in range(num_samples)]
 			sim.write(data,args)
+
+		N = num_features(data[0])
+		explanations = ["feature {0:d}".format(i) for i in range(N)]
 	else:
 		print("No matching dataset!")
 
+	args.explanations = explanations
+
 	return data
 
+# split data into train and test
 def split(args,data):
 	split_method = args.split_method
-	# split data into train and test
 	if split_method == "TIMEWISE":	
 		train_share = 0.6
 		test_share = 0.2
@@ -58,7 +70,7 @@ def split(args,data):
 ## Candidate Generation
 
 def candidate_generate(train_data,subgroups,args):
-	N = np.shape(train_data[0])[1]
+	N = num_features(train_data[0])
 
 	gen = args.generation.upper()
 	if gen == "TRIVIAL":
@@ -79,8 +91,8 @@ def candidate_generate(train_data,subgroups,args):
 
 # returns models = [obj]
 def train(data,args):
-	print(np.shape(data[0]))
-	N = np.shape(data[0])[1]
+	#print(np.shape(data[0]))
+	N = num_features(data[0])
 
 	train_type = args.model
 	if train_type == "TRIVIAL":
@@ -113,16 +125,6 @@ def subgroup_learn(train_data,subgroup,args):
 
 	return mod
 
-## Testing
-
-def reset_models(models):
-	for mod in models:
-		mod.reset()
-
-def update_models(data,models):
-	for mod in models:
-		mod.update_array(data[:,mod.subgroup])
-
 def remaining_features(N,models):
 	remains = list(range(N))
 	for mod in models:
@@ -134,10 +136,20 @@ def baseline_remain(train_data,models,baseline,args):
 	args = copy.copy(args)
 	args.model = baseline
 
-	N = np.shape(train_data[0])[1]
+	N = num_features(train_data[0])
 	remains = remaining_features(N,models)
 
 	return subgroup_learn(train_data,remains,args)
+
+## Testing
+
+def reset_models(models):
+	for mod in models:
+		mod.reset()
+
+def update_models(data,models):
+	for mod in models:
+		mod.update_array(data[:,mod.subgroup])
 
 def predict_data(dat,models,k):
 	pred_mat = np.zeros_like(dat)
@@ -153,7 +165,7 @@ def predict_data(dat,models,k):
 	return pred_mat
 
 # returns either: predicted series or predicted classes/scores
-def test(train_data,test_data,models,args,lables=[]):
+def test(train_data,test_data,models,args):
 	test_type = args.test_type
 	k = int(args.pred_k)
 	split_method = args.split_method
@@ -177,7 +189,8 @@ def test(train_data,test_data,models,args,lables=[]):
 	return pred
 
 # outputs performance scores, plots
-def evaluate(pred,gt,evaluate_on):
+# this function should be split into two: one evaluate() and one present()
+def evaluate(pred,gt,evaluate_on,args):
 	rmses = []
 	for pred_mat,gt_mat in zip(pred,gt):
 		#print(pred_mat)
@@ -200,16 +213,36 @@ def evaluate(pred,gt,evaluate_on):
 
 	return 0
 
-def subgroup_score(train_data,test_data,mod,args):
+def subgroup_score(train_data,test_data,mod,args,labels=[]):
 	pred_k = int(args.pred_k)
-	#
+	
 	pred = test(train_data,[test_dat[:-pred_k] for test_dat in test_data],[mod],args)
-	gt = [test_dat[pred_k:] for test_dat in test_data]
 
-	score = evaluate(pred,gt,mod.subgroup)
+	test_type = args.test_type.upper()
+	if test_type == "PREDICTION":
+		gt = [test_dat[pred_k:] for test_dat in test_data]
+	elif test_type == "CLASSIFICATION":
+		gt = labels
+	else:
+		print("Unknown test!")
+
+	if len(mod) == 1:
+		print("Evaluating subgroup:")
+		score = evaluate(pred,gt,mod.subgroup,args)
+	else:
+		N = num_features(test_data[0])
+		if args.subgroup_only_eval:
+			remains = mod[-1].subgroup
+			evaluate_on = remaining_features(N,remains)
+			remains = []
+		else:
+			evaluate_on = list(range(N))
+		print("Evaluating several: ")
+		score = evaluate(pred,gt,evaluate_on,args)
 
 	return score
 
+'''
 def evaluate_all(train_data,test_data,models,remains,args):
 	N = np.shape(test_data[0])[1]
 	if args.subgroup_only_eval:
@@ -219,16 +252,18 @@ def evaluate_all(train_data,test_data,models,remains,args):
 		evaluate_on = list(range(N))
 
 	pred_k = int(args.pred_k)
-	#
-	pred = test(train_data,[test_dat[:-pred_k] for test_dat in test_data],models+remains,args)
-	gt = [test_dat[pred_k:] for test_dat in test_data]
 
+	pred = test(train_data,[test_dat[:-pred_k] for test_dat in test_data],models+remains,args)
+
+	print("Evaluating all: ")
 	score = evaluate(pred,gt,evaluate_on)
 
 	return score
+'''
 
-def subgroup_select(mod,modelsa,args):
-
+# alters models depending on what has become known with the new mod
+def subgroup_select(mod,models,args):
+	
 	return False
 
 ## Main
@@ -252,11 +287,11 @@ def subgroup(data,args):
 		print(cand)
 		mod = subgroup_learn(train_data,cand,args)
 		mod.score = subgroup_score(train_data,test_data,mod,args)
-		if subgroup_select(mod,models,args):
-			models.append(mod)
+		subgroup_select(mod,models,args):
+		
 		rem = baseline_remain(train_data,models+[mod],"VARMA",args)
 
-		evaluate_all(train_data,test_data,models+[mod],[rem],args)
+		subgroup_score(train_data,test_data,models+[mod]+[rem],args)
 
 def main(args):
 	settings(args)

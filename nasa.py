@@ -138,7 +138,7 @@ def main(args):
 					data = data[:max_plots]
 				pp.display_parallel(data,explanations)
 		else:
-			return data
+			return data,explanations
 
 	else:	
 		if datatype == "SEQUENTIAL":

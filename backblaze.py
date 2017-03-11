@@ -124,7 +124,11 @@ def main(args):
 			data = [dat[:,normalized_idx] for dat in data]
 			data = pp.only_numeric(data)
 			data = [dat for dat in data if not np.nan in dat]
-			return data
+
+			explanations = list(smart_explanations.values())
+			print("read this, jonatan: ")
+			print(explanations)
+			return data,explanations
 			
 	elif datatype == "INSTANCE":
 		pattern = '[0-9-]*.csv'
