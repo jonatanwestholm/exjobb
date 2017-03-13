@@ -15,9 +15,65 @@ import backblaze
 
 # auxilliary
 
+# class's tasks:
+# -control that no feature is modelled more than once by subgroups
+# -keep track of which features are not modelled by subgroups
+class Subgroup_collection:
+	# N is number of features in dataset
+	def __init__(self,N,models):
+		self.N = N
+		self.models = []
+		self.candidates = []
+		self.remaining = []
+		self.add(models,"MODELS")
+
+	def get_covered(self):
+		established = flatten([mod.subgroup for mod in self.models])
+		candidate = flatten([mod.subgroup for mod in self.candidates])
+		return established + candidate
+
+	def get_remaining(self):
+		covered = self.get_covered()
+		return [i for i in range(self.N) if i not in covered]
+
+	def add(self,mods,status):
+		covered = self.get_covered()
+		for mod in mods:
+			for feature in mod.subgroup:
+				if feature in covered:
+					print("Feature already covered by collection!!")
+					raise
+				else:
+					covered.append(feature)
+			if status == "MODELS":
+				self.models.append(mod)
+			elif status == "CANDIDATES":
+				self.candidates.append(mod)
+			elif status == "REMAINING":
+				self.remaining.append(mod)
+
+	def reset(self):
+		self.candidates = []
+		self.remaining = []
+
+# turns list of lists into list
+def flatten(lst):
+	return [elem for sublist in lst for elem in sublist]
+
+def is_tensor(X,order):
+	#print(X)
+	#print(np.shape(X))
+	if sum(np.array(np.shape(X)) > 1) == order:
+		return True
+	else:
+		return False
+
 # it is decided that this should always work
 def num_features(dat):
-	return np.shape(dat)[1]
+	if is_tensor(dat,1):
+		return 1
+	else:
+		return np.shape(dat)[1]
 
 ## Preprocessing
 
@@ -69,12 +125,12 @@ def split(args,data):
 
 ## Candidate Generation
 
-def candidate_generate(train_data,subgroups,args):
-	N = num_features(train_data[0])
+def candidate_generate(train_data,remaining,args):
+	N = len(remaining)
 
 	gen = args.generation.upper()
 	if gen == "TRIVIAL":
-		return list(range(N))
+		cand = list(range(N))
 	elif gen == "RANDOM":
 		# take out random 
 		while True:
@@ -82,48 +138,73 @@ def candidate_generate(train_data,subgroups,args):
 			cand = list(np.where(np.random.randint(0,2,N))[0])
 			length = len(cand)
 			if args.settings["min_subgroup_length"] <= length and length <= args.settings["max_subgroup_length"]:
-				return cand
+				if cand == [3,4,5]:
+					break
 
 	elif gen == "LINCORR":
 		pass
 
+	return [remaining[i] for i in cand]
+
 ## Training
 
+def train_varma(data,subgroup,p,q,re_series,rw_series):
+	N = num_features(data[0])
+	print(N)
+	#p = args.settings["VARMA_p"]
+	#q = args.settings["VARMA_q"]
+	orders = [N,p,q]
+	mod = Models.VARMA(orders)
+	i = 0
+	for dat in data:
+		#print(np.shape(dat))num_series = 100
+		#num_series = 10
+		#iterations = int(10000/N)
+		#re_series = args.settings["re_series"] #np.logspace(-1,-6,num_series)
+		#rw_series = args.settings["rw_series"] #500*np.logspace(0,-1,num_series)
+		#meta_series = np.logspace(0,0,iterations)
+		mod.annealing(dat,re_series,rw_series,initiate= i==0)
+		mod.reset()
+		i += 1
+	print(mod.A)
+	print(mod.C)
+
+	mod.subgroup = subgroup
+
+	return mod
+
 # returns models = [obj]
-def train(data,args):
+def train(data,subgroup,args):
 	#print(np.shape(data[0]))
 	N = num_features(data[0])
 
 	train_type = args.model
 	if train_type == "TRIVIAL":
 		mod = Models.Trivial()
+		mod.subgroup = subgroup
+		mods = [mod]
 	elif train_type == "VARMA":
 		p = args.settings["VARMA_p"]
 		q = args.settings["VARMA_q"]
-		orders = [N,p,q]
-		mod = Models.VARMA(orders)
-		i = 0
-		for dat in data:
-			#print(np.shape(dat))num_series = 100
-			#num_series = 10
-			#iterations = int(10000/N)
-			re_series = args.settings["re_series"] #np.logspace(-1,-6,num_series)
-			rw_series = args.settings["rw_series"] #500*np.logspace(0,-1,num_series)
-			#meta_series = np.logspace(0,0,iterations)
-			mod.annealing(dat,re_series,rw_series,initiate= i==0)
-			mod.reset()
-			i += 1
-		print(mod.A)
-		print(mod.C)
+		re_series = args.settings["re_series"]
+		rw_series = args.settings["rw_series"]
+		mods = [train_varma(data,subgroup,p,q,re_series,rw_series)]
+	elif train_type == "ARMA_PARALLEL":
+		p = args.settings["VARMA_p"]
+		q = args.settings["ARMA_q"]
+		re_series = args.settings["re_series"]
+		rw_series = args.settings["rw_series"]
+		mods = [train_varma([dat[:,i] for dat in data],[subgroup[i]],p,q,re_series,rw_series) for i in range(N)]
 
-	return mod
+	return mods
 
 def subgroup_learn(train_data,subgroup,args):
 	#print(type(subgroup))
-	mod = train([dat[:,subgroup] for dat in train_data],args)
-	mod.subgroup = subgroup
-
-	return mod
+	if subgroup:
+		mods = train([dat[:,subgroup] for dat in train_data],subgroup,args)
+		return mods
+	else:
+		return []
 
 def remaining_features(N,models):
 	remains = list(range(N))
@@ -132,12 +213,13 @@ def remaining_features(N,models):
 			remains.remove(feature)
 	return remains
 
-def baseline_remain(train_data,models,baseline,args):
+def baseline_remain(train_data,sub_col,baseline,args):
 	args = copy.copy(args)
 	args.model = baseline
 
-	N = num_features(train_data[0])
-	remains = remaining_features(N,models)
+	#N = num_features(train_data[0])
+	#remains = remaining_features(N,models)
+	remains = sub_col.get_remaining()
 
 	return subgroup_learn(train_data,remains,args)
 
@@ -200,80 +282,65 @@ def evaluate(pred,gt,evaluate_on,args):
 		rms = fro/np.sqrt(np.size(pred_mat))
 		rmses.append(rms)
 		print("RMS norm of error: {0:.3f}".format(rms))
-		'''
-		for i in range(np.shape(pred_mat)[1]):
-			plt.figure()
-			plt.plot(pred_mat[:,i],'b')
-			plt.plot(gt_mat[:,i],'r')
-		plt.show()
-		'''
+		
+		if args.plot:
+			for i,feature in enumerate(evaluate_on):
+				plt.figure()
+				plt.title(args.explanations[feature])
+				plt.plot(pred_mat[:,i],'b')
+				plt.plot(gt_mat[:,i],'r')
+				plt.legend(["Predicted", "Ground Truth"])
+				plt.xlabel("Time")
+				plt.ylabel("Value")
+			plt.show()
 		
 	rmses = np.array(rmses)
 	print("Avg: {0:.3f}, Min: {1:.3f}, Max: {2:.3f}".format(np.mean(rmses),np.min(rmses),np.max(rmses)))
 
 	return 0
 
-def subgroup_score(train_data,test_data,mod,args,labels=[]):
+def subgroup_score(train_data,test_data,sub_col,args,labels=[]):
 	pred_k = int(args.pred_k)
 	
-	pred = test(train_data,[test_dat[:-pred_k] for test_dat in test_data],[mod],args)
+	pred = test(train_data,[test_dat[:-pred_k] for test_dat in test_data],sub_col.candidates + sub_col.remaining,args)
 
 	test_type = args.test_type.upper()
 	if test_type == "PREDICTION":
 		gt = [test_dat[pred_k:] for test_dat in test_data]
+		N = num_features(test_data[0])
+		if args.subgroup_only_eval or not sub_col.remaining:
+			evaluate_on = sub_col.get_covered()
+			mods = sub_col.candidates
+		else:
+			evaluate_on = list(range(N))
+			mods = sub_col.candidates + sub_col.remaining
+
+		print("Evaluating on: ")
+		for mod in mods:
+			print(str(mod.subgroup) + ": " +type(mod).__name__)
+
+		print(evaluate_on)
 	elif test_type == "CLASSIFICATION":
 		gt = labels
 	else:
 		print("Unknown test!")
 
-	if len(mod) == 1:
-		print("Evaluating subgroup:")
-		score = evaluate(pred,gt,mod.subgroup,args)
-	else:
-		N = num_features(test_data[0])
-		if args.subgroup_only_eval:
-			remains = mod[-1].subgroup
-			evaluate_on = remaining_features(N,remains)
-			remains = []
-		else:
-			evaluate_on = list(range(N))
-		print("Evaluating several: ")
-		score = evaluate(pred,gt,evaluate_on,args)
+	score = evaluate(pred,gt,evaluate_on,args)
 
-	return score
-
-'''
-def evaluate_all(train_data,test_data,models,remains,args):
-	N = np.shape(test_data[0])[1]
-	if args.subgroup_only_eval:
-		evaluate_on = remaining_features(N,remains)
-		remains = []
-	else:
-		evaluate_on = list(range(N))
-
-	pred_k = int(args.pred_k)
-
-	pred = test(train_data,[test_dat[:-pred_k] for test_dat in test_data],models+remains,args)
-
-	print("Evaluating all: ")
-	score = evaluate(pred,gt,evaluate_on)
-
-	return score
-'''
+	return score 
 
 # alters models depending on what has become known with the new mod
 def subgroup_select(mod,models,args):
-	
 	return False
 
 ## Main
 def settings(args):
 	num_series = 10
 
-	settings = {"min_subgroup_length": 3, "max_subgroup_length": 5,  # general
-				"VARMA_p": 2, "VARMA_q": 0, # VARMA orders
+	settings = {"min_subgroup_length": 3, "max_subgroup_length": 3,  # general
+				"VARMA_p": 2, "VARMA_q": 0, "ARMA_q": 2, # VARMA orders
 				"re_series": np.logspace(-1,-6,num_series), "rw_series": 500*np.logspace(0,-1,num_series), # VARMA training
-				"num_timepoints": 1000, "num_samples": 50, "case": "case3" # VARMA sim
+				"num_timepoints": 1000, "num_samples": 50, "case": "case4" # VARMA sim
 				}
 
 	args.settings = settings
@@ -281,17 +348,25 @@ def settings(args):
 def subgroup(data,args):
 	train_data,test_data = split(args,data)
 
-	models = []
-	for i in range(1):
-		cand = candidate_generate(train_data,models,args)
+	N = num_features(data[0])
+	sub_col = Subgroup_collection(N,[])
+	for i in range(5):
+		cand = candidate_generate(train_data,sub_col.get_remaining(),args)
 		print(cand)
-		mod = subgroup_learn(train_data,cand,args)
-		mod.score = subgroup_score(train_data,test_data,mod,args)
-		subgroup_select(mod,models,args):
+		mods = subgroup_learn(train_data,cand,args)
+		for mod in mods:
+			print(mod.q)
+		sub_col.add(mods,"CANDIDATES")
+		#subgroup_score(train_data,test_data,sub_col,args)
+		#if not subgroup_select(mods,sub_col,args):
+		#	sub_col.remove_mods(mods)
 		
-		rem = baseline_remain(train_data,models+[mod],"VARMA",args)
+		rem = baseline_remain(train_data,sub_col,"ARMA_PARALLEL",args)
+		sub_col.add(rem,"REMAINING")
 
-		subgroup_score(train_data,test_data,models+[mod]+[rem],args)
+		subgroup_score(train_data,test_data,sub_col,args)
+
+		sub_col.reset()
 
 def main(args):
 	settings(args)
@@ -318,6 +393,7 @@ if __name__ == '__main__':
 	parser.add_argument('-t','--test_type',dest = 'test_type',default="PREDICTION",help='Type of learning')
 	parser.add_argument('-g','--generation',dest = 'generation',default="TRIVIAL",help='Type of candidate generation')
 	parser.add_argument('--subgroup_only_eval',dest = 'subgroup_only_eval',default=False,action="store_true",help='Only compare performance of subgroups')
+	parser.add_argument('--plot',dest = 'plot',default=False,action="store_true",help='Show prediction plots')
 	
 	args = parser.parse_args()
 	main(args)

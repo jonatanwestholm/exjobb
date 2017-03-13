@@ -180,9 +180,14 @@ class VARMA(MTS_Model):
 	def learn(self,Y):
 		A_hist = np.zeros([1,self.k,self.k*self.p])
 		C_hist = np.zeros([1,self.k,self.k*self.q])
+		#print("tensor level: "+ str(0+(self.k>1)))
+		#print(Y)
 		if is_tensor(Y,0+(self.k>1)):
 			self.learn_private(Y.T)				
 		else:
+			if is_tensor(Y,1):
+				Y = self.make_column(Y)
+				#print(Y)
 			for y in Y:
 				A,C = self.learn_private(y.T)
 				A_hist = np.concatenate([A_hist,[A]],axis=0)
@@ -292,61 +297,3 @@ class Kalman:
 		self.Ryy = (np.dot(self.C,np.dot(Rxx1,self.C.T)) + self.Rw).astype(dtype='float64') 
 
 		return self.X
-'''
-class RLS:
-	def __init__(self,X,Y,lamb):
-		self.lamb = lamb
-
-		# solve first as if they were instant
-		#print(np.shape(X))
-		self.dim = len(X[0])
-		#print(self.dim)
-		Y = Y.reshape([len(Y),1])
-		#print(np.shape(Y))
-
-		#print(X)
-		#print(Y)
-
-		self.theta = np.linalg.lstsq(X,Y)[0]
-		#print(self.theta)
-		#print(X)
-		#print(np.dot(X.T,X))
-		self.P = np.linalg.inv(np.dot(X.T,X))
-
-	def update_private(self,x,y,lamb=0):
-		#print(x)
-		x = x.reshape([self.dim,1])
-		if not lamb:
-			lamb = self.lamb
-		#print(self.P)
-		#print(x)
-		M = np.dot(self.P,x)
-		denominator = (lamb + np.dot(x.T,M))
-		K = M/denominator
-
-		#print(y)
-		#print(x.T)
-		#print(self.theta)
-		err = y-np.dot(x.T,self.theta)
-		#print(K)
-		#print(err)
-		self.theta += K*err
-		self.P = (self.P - np.dot(M,M.T)/denominator)/lamb
-
-		return self.theta
-
-	def update(self,Y,X,block=True):
-		if block:
-			lamb = 1
-		else:
-			lamb = self.lamb
-		if is_tensor(Y,order=2):
-			self.update_private(X[0],Y[0]) # first forgetting round
-			for x,y in zip(X[1:],Y[1:]):
-				self.update_private(x,y,lamb) # then
-		else:
-			#print(X)
-			self.update_private(X,Y,lamb)
-
-		return self.theta
-'''

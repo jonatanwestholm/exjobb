@@ -134,6 +134,18 @@ def mixed_varma(T,case,settings={}):
 
 		return np.concatenate([y_1,y_2],axis=1)
 
+	elif case == "case4":
+		A_1 = np.array([[0.1,0.5001,0.2,0,-0.3,0.7],[-0.2,0.1,0.5001,-0.7,0.3,-0.1],[0.5001,0.2,-0.1,0.4,0.6,-0.2]])
+		C_1 = np.array([[1,0,0],[0,1,0],[0,0,1]])
+
+		A_2 = np.array([[0.500,-0.2]])
+		C_2 = np.array([[1,0.4,0.3]])
+
+		y_1 = [varma_sim(C_1,A_1,T)]
+		y_2 = [varma_sim(C_2,A_2,T) for i in range(3)]
+
+		return np.concatenate(y_1+y_2,axis=1)
+
 	elif case == "random":
 		pass
 

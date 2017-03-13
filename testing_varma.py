@@ -80,8 +80,8 @@ iterations = 1 #int(10000/N)
 re_series = np.logspace(-1,-10,num_series)
 rw_series = 500*np.logspace(0,-1,num_series)
 meta_series = np.logspace(0,0,iterations)
-#A_hist,C_hist = models.annealing(Y,mod,re_series,rw_series,initiate=True)
-A_hist,C_hist = mod.ruminate(Y,re_series,rw_series,iterations,meta_series)
+A_hist,C_hist = mod.annealing(Y,re_series,rw_series,initiate=True)
+#A_hist,C_hist = mod.ruminate(Y,re_series,rw_series,iterations,meta_series)
 
 #print(np.shape(A_hist[:,,:]))
 N = np.shape(A_hist)[0]
