@@ -55,14 +55,46 @@ def filter_wrt(data,key,value):
 def filter_wrt_function(data,condition):
 	return [dat for dat in data if condition(dat)]
 
-def normalize(dat):
-	dat = np.array([feat - np.mean(feat) for feat in dat.T]).T
-	for i in range(np.shape(dat)[1]):
-		feat = dat[:,i]
-		sdev = np.std(feat)
-		if sdev:
-			dat[:,i] = feat/sdev # spreads the NaN
-	return dat
+def normalize(dat,return_mean_std=False):
+	dat_mean = [np.mean(feat) for feat in dat.T]
+	dat_std = [np.std(feat) for feat in dat.T]
+
+	dat = np.array([(feat - feat_mean)/feat_std for feat,feat_mean,feat_std in zip(dat.T,dat_mean,dat_std)]).T
+
+	if return_mean_std:
+		return dat,dat_mean,dat_std
+	else:
+		return dat
+
+def normalize_ref(dat,dat_mean,dat_std):
+	return np.array([(feat - feat_mean)/feat_std for feat,feat_mean,feat_std in zip(dat.T,dat_mean,dat_std)]).T	
+
+def remove_unchanging(data):
+	dat0 = data[0]
+	dat_std = [np.std(feat) for feat in dat0.T]
+	#print(dat_std)
+	changing = [i for i,item in enumerate(dat_std) if item > 10**-8]
+	print(changing)
+
+	data = [dat[:,changing] for dat in data]
+
+	return data,changing
+
+# split data into train and test
+def split(data,split_method):
+	split_method = split_method
+	if split_method == "TIMEWISE":	
+		train_share = 0.6
+		test_share = 0.2
+		train_data = [dat[0:int(np.floor(train_share*np.shape(dat)[0])),:] for dat in data]
+		test_data = [dat[int(np.floor(train_share*np.shape(dat)[0])):int(np.floor((train_share+test_share)*np.shape(dat)[0])),:] for dat in data]
+	elif split_method == "UNITWISE":
+		train_share = 0.2
+		test_share = 0.2
+		train_data = data[0:int(np.floor(train_share*len(data)))]
+		test_data = data[int(np.floor(train_share*len(data))):int(np.floor((train_share+test_share)*len(data)))]		
+
+	return train_data,test_data
 
 def display_parallel(data,explanations):
 	j = 1

@@ -125,9 +125,14 @@ def main(args):
 			data = pp.only_numeric(data)
 			data = [dat for dat in data if not np.nan in dat]
 
-			explanations = list(smart_explanations.values())
-			print("read this, jonatan: ")
-			print(explanations)
+			explanations = list(smart_explanations.smart.values())
+
+			#data,changing = pp.remove_unchanging(data)
+			#print(changing)
+			#explanations = [smart_explanations.smart[BB_SMART_order[i]] for i in changing]
+
+			#print("read this, jonatan: ")
+			#print(explanations)
 			return data,explanations
 			
 	elif datatype == "INSTANCE":

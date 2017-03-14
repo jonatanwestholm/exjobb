@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 import glob
 import copy
 
+import subgroup_auxilliary as aux
+import preprocessing as pp
 import sim
 import models as Models
 import nasa
@@ -18,62 +20,6 @@ import backblaze
 # class's tasks:
 # -control that no feature is modelled more than once by subgroups
 # -keep track of which features are not modelled by subgroups
-class Subgroup_collection:
-	# N is number of features in dataset
-	def __init__(self,N,models):
-		self.N = N
-		self.models = []
-		self.candidates = []
-		self.remaining = []
-		self.add(models,"MODELS")
-
-	def get_covered(self):
-		established = flatten([mod.subgroup for mod in self.models])
-		candidate = flatten([mod.subgroup for mod in self.candidates])
-		return established + candidate
-
-	def get_remaining(self):
-		covered = self.get_covered()
-		return [i for i in range(self.N) if i not in covered]
-
-	def add(self,mods,status):
-		covered = self.get_covered()
-		for mod in mods:
-			for feature in mod.subgroup:
-				if feature in covered:
-					print("Feature already covered by collection!!")
-					raise
-				else:
-					covered.append(feature)
-			if status == "MODELS":
-				self.models.append(mod)
-			elif status == "CANDIDATES":
-				self.candidates.append(mod)
-			elif status == "REMAINING":
-				self.remaining.append(mod)
-
-	def reset(self):
-		self.candidates = []
-		self.remaining = []
-
-# turns list of lists into list
-def flatten(lst):
-	return [elem for sublist in lst for elem in sublist]
-
-def is_tensor(X,order):
-	#print(X)
-	#print(np.shape(X))
-	if sum(np.array(np.shape(X)) > 1) == order:
-		return True
-	else:
-		return False
-
-# it is decided that this should always work
-def num_features(dat):
-	if is_tensor(dat,1):
-		return 1
-	else:
-		return np.shape(dat)[1]
 
 ## Preprocessing
 
@@ -91,6 +37,7 @@ def preprocess(args):
 	elif dataset == "VARMA_SIM":
 		if args.filename:
 			data = sim.read(args)
+			#data = [pp.normalize(dat) for dat in data]
 		else:
 			num_timepoints = args.settings["num_timepoints"]
 			num_samples = args.settings["num_samples"]
@@ -98,7 +45,7 @@ def preprocess(args):
 			data = [sim.mixed_varma(num_timepoints,case) for i in range(num_samples)]
 			sim.write(data,args)
 
-		N = num_features(data[0])
+		N = aux.num_features(data[0])
 		explanations = ["feature {0:d}".format(i) for i in range(N)]
 	else:
 		print("No matching dataset!")
@@ -107,76 +54,47 @@ def preprocess(args):
 
 	return data
 
-# split data into train and test
-def split(args,data):
-	split_method = args.split_method
-	if split_method == "TIMEWISE":	
-		train_share = 0.6
-		test_share = 0.2
-		train_data = [dat[0:int(np.floor(train_share*np.shape(dat)[0])),:] for dat in data]
-		test_data = [dat[int(np.floor(train_share*np.shape(dat)[0])):int(np.floor((train_share+test_share)*np.shape(dat)[0])),:] for dat in data]
-	elif split_method == "UNITWISE":
-		train_share = 0.2
-		test_share = 0.2
-		train_data = data[0:int(np.floor(train_share*len(data)))]
-		test_data = data[int(np.floor(train_share*len(data))):int(np.floor((train_share+test_share)*len(data)))]		
-
-	return train_data,test_data
-
 ## Candidate Generation
 
-def candidate_generate(train_data,remaining,args):
+def candidate_generate(train_data,remaining,num,args):
 	N = len(remaining)
 
 	gen = args.generation.upper()
 	if gen == "TRIVIAL":
 		cand = list(range(N))
+		cands = [aux.map_idx(remaining,cand)]*num # subgroups won't be edited, only read
 	elif gen == "RANDOM":
 		# take out random 
-		while True:
-			# generate random subset
-			cand = list(np.where(np.random.randint(0,2,N))[0])
-			length = len(cand)
-			if args.settings["min_subgroup_length"] <= length and length <= args.settings["max_subgroup_length"]:
-				if cand == [3,4,5]:
-					break
-
+		cands = []
+		for i in range(num):
+			while True:
+				# generate random subset
+				cand = list(np.where(np.random.randint(0,2,N))[0])
+				length = len(cand)
+				if args.settings["min_subgroup_length"] <= length and length <= args.settings["max_subgroup_length"]:
+					if cand == [0,1,2,3,4,5]:
+						break
+			cands.append(aux.map_idx(remaining,cand))
 	elif gen == "LINCORR":
-		pass
+		lag = 5
+		dat = train_data[0]
+		dat = pp.normalize(dat)
+		dep = aux.linear_dependence(dat,lag)
+		dep = (dep.T + dep)*0.5
+		aux.print_mat(dep)
 
-	return [remaining[i] for i in cand]
+		subgroup_length = args.settings["subgroup_length"]
+		cands = [aux.greedy_random_cand(dep,subgroup_length) for i in range(num)]
+		cands = [aux.map_idx(remaining,cand) for cand in cands]
+
+	return cands
 
 ## Training
-
-def train_varma(data,subgroup,p,q,re_series,rw_series):
-	N = num_features(data[0])
-	print(N)
-	#p = args.settings["VARMA_p"]
-	#q = args.settings["VARMA_q"]
-	orders = [N,p,q]
-	mod = Models.VARMA(orders)
-	i = 0
-	for dat in data:
-		#print(np.shape(dat))num_series = 100
-		#num_series = 10
-		#iterations = int(10000/N)
-		#re_series = args.settings["re_series"] #np.logspace(-1,-6,num_series)
-		#rw_series = args.settings["rw_series"] #500*np.logspace(0,-1,num_series)
-		#meta_series = np.logspace(0,0,iterations)
-		mod.annealing(dat,re_series,rw_series,initiate= i==0)
-		mod.reset()
-		i += 1
-	print(mod.A)
-	print(mod.C)
-
-	mod.subgroup = subgroup
-
-	return mod
 
 # returns models = [obj]
 def train(data,subgroup,args):
 	#print(np.shape(data[0]))
-	N = num_features(data[0])
+	N = aux.num_features(data[0])
 
 	train_type = args.model
 	if train_type == "TRIVIAL":
@@ -188,13 +106,13 @@ def train(data,subgroup,args):
 		q = args.settings["VARMA_q"]
 		re_series = args.settings["re_series"]
 		rw_series = args.settings["rw_series"]
-		mods = [train_varma(data,subgroup,p,q,re_series,rw_series)]
+		mods = [aux.train_varma(data,subgroup,p,q,re_series,rw_series)]
 	elif train_type == "ARMA_PARALLEL":
 		p = args.settings["VARMA_p"]
 		q = args.settings["ARMA_q"]
 		re_series = args.settings["re_series"]
 		rw_series = args.settings["rw_series"]
-		mods = [train_varma([dat[:,i] for dat in data],[subgroup[i]],p,q,re_series,rw_series) for i in range(N)]
+		mods = [aux.train_varma([dat[:,i] for dat in data],[subgroup[i]],p,q,re_series,rw_series) for i in range(N)]
 
 	return mods
 
@@ -205,13 +123,6 @@ def subgroup_learn(train_data,subgroup,args):
 		return mods
 	else:
 		return []
-
-def remaining_features(N,models):
-	remains = list(range(N))
-	for mod in models:
-		for feature in mod.subgroup:
-			remains.remove(feature)
-	return remains
 
 def baseline_remain(train_data,sub_col,baseline,args):
 	args = copy.copy(args)
@@ -225,27 +136,6 @@ def baseline_remain(train_data,sub_col,baseline,args):
 
 ## Testing
 
-def reset_models(models):
-	for mod in models:
-		mod.reset()
-
-def update_models(data,models):
-	for mod in models:
-		mod.update_array(data[:,mod.subgroup])
-
-def predict_data(dat,models,k):
-	pred_mat = np.zeros_like(dat)
-	i = 0
-	for sample in dat:
-		pred_array = np.zeros_like(sample)
-		for mod in models:
-			mod.update(sample[mod.subgroup])
-			pred_array[mod.subgroup] = mod.predict(k)
-
-		pred_mat[i,:] = pred_array
-		i += 1
-	return pred_mat
-
 # returns either: predicted series or predicted classes/scores
 def test(train_data,test_data,models,args):
 	test_type = args.test_type
@@ -257,13 +147,13 @@ def test(train_data,test_data,models,args):
 		# take prediction unit by unit - units are assumed to be independent
 		for tr_dat,test_dat in zip(train_data,test_data):
 			# reset all inner states first
-			reset_models(models)
+			aux.reset_models(models)
 
 			# set states of models
 			if split_method == "TIMEWISE":
-				update_models(tr_dat,models)
+				aux.update_models(tr_dat,models)
 
-			pred.append(predict_data(test_dat,models,k))
+			pred.append(aux.predict_data(test_dat,models,k))
 
 	elif test_type == "CLASSIFICATION":
 		pass # how to do this with subgroups? not my problem for now
@@ -276,9 +166,13 @@ def evaluate(pred,gt,evaluate_on,args):
 	rmses = []
 	for pred_mat,gt_mat in zip(pred,gt):
 		#print(pred_mat)
-		pred_mat = pred_mat[:,evaluate_on]
 		gt_mat = gt_mat[:,evaluate_on]
-		fro = np.linalg.norm(pred_mat-gt_mat)
+		pred_mat = pred_mat[:,evaluate_on]
+
+		gt_mat,gt_mean,gt_std = pp.normalize(gt_mat,return_mean_std=True)
+		pred_mat = pp.normalize_ref(pred_mat,gt_mean,gt_std)
+		diff = pred_mat-gt_mat 
+		fro = np.linalg.norm(diff)
 		rms = fro/np.sqrt(np.size(pred_mat))
 		rmses.append(rms)
 		print("RMS norm of error: {0:.3f}".format(rms))
@@ -307,7 +201,7 @@ def subgroup_score(train_data,test_data,sub_col,args,labels=[]):
 	test_type = args.test_type.upper()
 	if test_type == "PREDICTION":
 		gt = [test_dat[pred_k:] for test_dat in test_data]
-		N = num_features(test_data[0])
+		N = aux.num_features(test_data[0])
 		if args.subgroup_only_eval or not sub_col.remaining:
 			evaluate_on = sub_col.get_covered()
 			mods = sub_col.candidates
@@ -337,7 +231,7 @@ def subgroup_select(mod,models,args):
 def settings(args):
 	num_series = 10
 
-	settings = {"min_subgroup_length": 3, "max_subgroup_length": 3,  # general
+	settings = {"min_subgroup_length": 3, "max_subgroup_length": 6, "subgroup_length": 3, # general
 				"VARMA_p": 2, "VARMA_q": 0, "ARMA_q": 2, # VARMA orders
 				"re_series": np.logspace(-1,-6,num_series), "rw_series": 500*np.logspace(0,-1,num_series), # VARMA training
 				"num_timepoints": 1000, "num_samples": 50, "case": "case4" # VARMA sim
@@ -346,16 +240,26 @@ def settings(args):
 	args.settings = settings
 
 def subgroup(data,args):
-	train_data,test_data = split(args,data)
+	train_data,test_data = pp.split(data,args.split_method)
 
-	N = num_features(data[0])
-	sub_col = Subgroup_collection(N,[])
-	for i in range(5):
-		cand = candidate_generate(train_data,sub_col.get_remaining(),args)
+	N = aux.num_features(data[0])
+	sub_col = aux.Subgroup_collection(N,[])
+	#for i in range(1):
+	num = 20
+	cands = candidate_generate(train_data,sub_col.get_remaining(),num,args)
+	for cand in cands:
+		print(cand)
+
+	print(args.explanations)
+	plt.plot(data[1][:,4])
+	plt.plot(data[1][:,6])
+	plt.show()
+	'''
+	for cand in cands:
 		print(cand)
 		mods = subgroup_learn(train_data,cand,args)
-		for mod in mods:
-			print(mod.q)
+		#for mod in mods:
+		#	print(mod.q)
 		sub_col.add(mods,"CANDIDATES")
 		#subgroup_score(train_data,test_data,sub_col,args)
 		#if not subgroup_select(mods,sub_col,args):
@@ -367,6 +271,7 @@ def subgroup(data,args):
 		subgroup_score(train_data,test_data,sub_col,args)
 
 		sub_col.reset()
+	'''
 
 def main(args):
 	settings(args)

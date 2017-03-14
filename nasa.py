@@ -138,6 +138,10 @@ def main(args):
 					data = data[:max_plots]
 				pp.display_parallel(data,explanations)
 		else:
+
+			data,changing = pp.remove_unchanging(data)
+			print(changing)
+			explanations = [explanations[i] for i in changing]
 			return data,explanations
 
 	else:	
