@@ -72,15 +72,19 @@ def candidate_generate(train_data,remaining,num,args):
 				cand = list(np.where(np.random.randint(0,2,N))[0])
 				length = len(cand)
 				if args.settings["min_subgroup_length"] <= length and length <= args.settings["max_subgroup_length"]:
-					if cand == [0,1,2,3,4,5]:
-						break
+					#if cand == [1,13,16]:
+					break
 			cands.append(aux.map_idx(remaining,cand))
 	elif gen == "LINCORR":
 		lag = 5
-		dat = train_data[0]
-		dat = pp.normalize(dat)
-		dep = aux.linear_dependence(dat,lag)
+		dep = np.zeros([N,N])
+		for dat in train_data:
+			#aux.print_mat(dat)
+			dat = pp.normalize(dat,leave_zero=True)
+			dep += aux.linear_dependence(dat,lag)
 		dep = (dep.T + dep)*0.5
+		dep = aux.normalize_corr_mat(dep)
+		print("Correlation matrix: ")
 		aux.print_mat(dep)
 
 		subgroup_length = args.settings["subgroup_length"]
@@ -231,7 +235,7 @@ def subgroup_select(mod,models,args):
 def settings(args):
 	num_series = 10
 
-	settings = {"min_subgroup_length": 3, "max_subgroup_length": 6, "subgroup_length": 3, # general
+	settings = {"min_subgroup_length": 3, "max_subgroup_length": 6, "subgroup_length": 17, # general
 				"VARMA_p": 2, "VARMA_q": 0, "ARMA_q": 2, # VARMA orders
 				"re_series": np.logspace(-1,-6,num_series), "rw_series": 500*np.logspace(0,-1,num_series), # VARMA training
 				"num_timepoints": 1000, "num_samples": 50, "case": "case4" # VARMA sim
@@ -240,38 +244,44 @@ def settings(args):
 	args.settings = settings
 
 def subgroup(data,args):
-	train_data,test_data = pp.split(data,args.split_method)
+	train_data,test_data = pp.split(data,args.split_method,train_share=0.6)
+	print(len(train_data))
 
 	N = aux.num_features(data[0])
 	sub_col = aux.Subgroup_collection(N,[])
 	#for i in range(1):
 	num = 20
 	cands = candidate_generate(train_data,sub_col.get_remaining(),num,args)
-	for cand in cands:
-		print(cand)
+	#for cand in cands:
+	#	print(cand)
 
+	'''
+	legends = []
 	print(args.explanations)
-	plt.plot(data[1][:,4])
-	plt.plot(data[1][:,6])
+	for feature in [1,2,5]:
+		plt.plot(data[0][:,feature])
+		legends.append(args.explanations[feature])
+	plt.legend(legends)
 	plt.show()
 	'''
+
 	for cand in cands:
 		print(cand)
 		mods = subgroup_learn(train_data,cand,args)
 		#for mod in mods:
 		#	print(mod.q)
 		sub_col.add(mods,"CANDIDATES")
-		#subgroup_score(train_data,test_data,sub_col,args)
+		subgroup_score(train_data,test_data,sub_col,args)
 		#if not subgroup_select(mods,sub_col,args):
 		#	sub_col.remove_mods(mods)
 		
-		rem = baseline_remain(train_data,sub_col,"ARMA_PARALLEL",args)
-		sub_col.add(rem,"REMAINING")
+		#rem = baseline_remain(train_data,sub_col,"ARMA_PARALLEL",args)
+		#sub_col.add(rem,"REMAINING")
 
-		subgroup_score(train_data,test_data,sub_col,args)
+		#subgroup_score(train_data,test_data,sub_col,args)
 
 		sub_col.reset()
-	'''
+	
 
 def main(args):
 	settings(args)

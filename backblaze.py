@@ -14,6 +14,13 @@ import preprocessing as pp
 BB_SMART_order = [1,2,3,4,5,7,9,10,11,12,13,15,22,183,184,187,188,189,190,191,192,193,194,195,196,197,198,199,200,201,220,222,223,224,225,226,240,241,242,250,251,252,254,255]
 normalized_idx = list(range(5,96,2))
 
+def smart_expl(idx):
+	try:
+		expl = smart_explanations.smart[BB_SMART_order[idx]]
+	except KeyError:
+		expl = "S.M.A.R.T feature " + str(BB_SMART_order[idx])
+	return expl
+
 def melt_instance(args,dir_name,pattern,location):
 	target = args.target
 	filenames = glob.glob(dir_name+pattern)
@@ -85,7 +92,7 @@ def main(args):
 				plt.figure()
 				plt.xlabel('Days before failure (red) or end of measurement (blue)')
 				try:
-					plt.title("S.M.A.R.T feature {0:d}: {1:s}".format(BB_SMART_order[i],smart_explanations.smart[BB_SMART_order[i]]))
+					plt.title("S.M.A.R.T feature {0:d}: {1:s}".format(BB_SMART_order[i],smart_expl(i)))
 				except IndexError:
 					plt.title("Plot {0:d}".format(i))
 				except KeyError:
@@ -127,12 +134,16 @@ def main(args):
 
 			explanations = list(smart_explanations.smart.values())
 
-			#data,changing = pp.remove_unchanging(data)
+			data,changing = pp.remove_unchanging(data)
+
+			print("before removing missing: "+ str(len(data)))
+			data = pp.remove_instances_with_missing(data)
+			print("after removing missing: "+ str(len(data)))
 			#print(changing)
-			#explanations = [smart_explanations.smart[BB_SMART_order[i]] for i in changing]
+			explanations = [smart_expl(i) for i in changing]
 
 			#print("read this, jonatan: ")
-			#print(explanations)
+			print(explanations)
 			return data,explanations
 			
 	elif datatype == "INSTANCE":

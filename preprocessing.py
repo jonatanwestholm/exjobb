@@ -9,6 +9,8 @@ import scipy.io
 import glob
 import time
 
+## I/O
+
 def read_file(name,elemsep,linesep,readlines):
 	f = open(name,'r').read()
 
@@ -37,12 +39,6 @@ def greedy_numeric(string):
 	except ValueError:
 		return np.nan
 
-def only_numeric(data):	
-	first_row = data[0][0,:]
-	is_numeric = np.array([not np.isnan(elem) for elem in first_row],dtype=bool)
-	only_num = [dat[:,is_numeric] for dat in data]
-	return only_num
-
 def write_line(line,elemsep):
 	return elemsep.join([str(elem) for elem in line])
 
@@ -55,9 +51,16 @@ def filter_wrt(data,key,value):
 def filter_wrt_function(data,condition):
 	return [dat for dat in data if condition(dat)]
 
-def normalize(dat,return_mean_std=False):
+## Mathematical operations
+
+def normalize(dat,return_mean_std=False,leave_zero=False):
 	dat_mean = [np.mean(feat) for feat in dat.T]
 	dat_std = [np.std(feat) for feat in dat.T]
+
+	if leave_zero:
+		for i,stdev in enumerate(dat_std):
+			if stdev < 10**-8:
+				dat_std[i] = 1
 
 	dat = np.array([(feat - feat_mean)/feat_std for feat,feat_mean,feat_std in zip(dat.T,dat_mean,dat_std)]).T
 
@@ -68,6 +71,16 @@ def normalize(dat,return_mean_std=False):
 
 def normalize_ref(dat,dat_mean,dat_std):
 	return np.array([(feat - feat_mean)/feat_std for feat,feat_mean,feat_std in zip(dat.T,dat_mean,dat_std)]).T	
+
+def normalize_all(data,leave_zero=False):
+	__,dat_mean,dat_std = normalize(np.concatenate(data,axis=0),return_mean_std=True,leave_zero=leave_zero)
+	return [normalize_ref(dat,dat_mean,dat_std) for dat in data]
+
+def only_numeric(data):	
+	first_row = data[0][0,:]
+	is_numeric = np.array([not np.isnan(elem) for elem in first_row],dtype=bool)
+	only_num = [dat[:,is_numeric] for dat in data]
+	return only_num
 
 def remove_unchanging(data):
 	dat0 = data[0]
@@ -80,21 +93,31 @@ def remove_unchanging(data):
 
 	return data,changing
 
+## Managing data
+
+def has_missing(dat):
+	return np.any(np.isnan(dat))
+
+def remove_instances_with_missing(data):
+	return [dat for dat in data if not has_missing(dat)]
+
 # split data into train and test
-def split(data,split_method):
+def split(data,split_method,train_share=0.6,test_share=0.2):
 	split_method = split_method
 	if split_method == "TIMEWISE":	
-		train_share = 0.6
-		test_share = 0.2
+		#train_share = 0.6
+		#test_share = 0.2
 		train_data = [dat[0:int(np.floor(train_share*np.shape(dat)[0])),:] for dat in data]
 		test_data = [dat[int(np.floor(train_share*np.shape(dat)[0])):int(np.floor((train_share+test_share)*np.shape(dat)[0])),:] for dat in data]
 	elif split_method == "UNITWISE":
-		train_share = 0.2
-		test_share = 0.2
+		#train_share = 0.2
+		#test_share = 0.2
 		train_data = data[0:int(np.floor(train_share*len(data)))]
 		test_data = data[int(np.floor(train_share*len(data))):int(np.floor((train_share+test_share)*len(data)))]		
 
 	return train_data,test_data
+
+## Visualizations
 
 def display_parallel(data,explanations):
 	j = 1
