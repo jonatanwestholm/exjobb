@@ -11,8 +11,16 @@ import time
 import smart_explanations
 import preprocessing as pp
 
-BB_SMART_order = [1,2,3,4,5,7,9,10,11,12,13,15,22,183,184,187,188,189,190,191,192,193,194,195,196,197,198,199,200,201,220,222,223,224,225,226,240,241,242,250,251,252,254,255]
-normalized_idx = list(range(5,96,2))
+BB_SMART_order = [1,2,3,4,5,7,8,9,10,11,12,13,15,22,183,184,187,188	,189,190,191,192,193,194,195,196,197,198,199,200,201,220,222,223,224,225,226,240,241,242,250,251,252,254,255]
+normalized_idx = list(range(5,95,2))
+
+min_sample_time = 30
+
+def all_smart_except(remove):
+	#N = np.shape(data[0])[1]
+	#print(data[0][:,0])
+	idxs = [i for i,smart in enumerate(BB_SMART_order) if not smart in remove]
+	return idxs
 
 def smart_expl(idx):
 	try:
@@ -74,6 +82,10 @@ def main(args):
 			dat.remove([])
 		data = [np.array(dat) for dat in data]
 
+		#numeric_per_row = [pp.count_numeric(row) for row in data[0]]
+		#print("Max numeric: " + str(max(numeric_per_row)))
+		#print("Argmax numeric: " + str(np.argmax(numeric_per_row)))
+
 		if __name__ == '__main__':
 			max_length = max(map(lambda x: np.shape(x)[0],data))
 
@@ -129,21 +141,25 @@ def main(args):
 
 		else:
 			data = [dat[:,normalized_idx] for dat in data]
-			data = pp.only_numeric(data)
-			data = [dat for dat in data if not np.nan in dat]
+			idxs = set(all_smart_except([194]))
+			#print(idxs)
+			#print(set(pp.numeric_idxs(data)))
+			idxs = set.intersection(idxs,set(pp.numeric_idxs(data)))
+			#print(idxs)
+			idxs = set.intersection(idxs,set(pp.changing_idxs(data)))
+			
+			data = [dat[:,sorted(idxs)] for dat in data]
+			explanations = [smart_expl(i) for i in sorted(idxs)]
 
-			explanations = list(smart_explanations.smart.values())
+			print("before removing missing and small: "+ str(len(data)))
+			data,__ = pp.remove_instances_with_missing(data)
+			data = pp.remove_small_samples(data,min_sample_time)
+			print("after removing missing and small: "+ str(len(data)))
 
-			data,changing = pp.remove_unchanging(data)
+			data = pp.normalize_all(data)
+			print("Qualified indexes: " + str(sorted(idxs)))
+			print("Explanations: " + str(explanations))
 
-			print("before removing missing: "+ str(len(data)))
-			data = pp.remove_instances_with_missing(data)
-			print("after removing missing: "+ str(len(data)))
-			#print(changing)
-			explanations = [smart_expl(i) for i in changing]
-
-			#print("read this, jonatan: ")
-			print(explanations)
 			return data,explanations
 			
 	elif datatype == "INSTANCE":

@@ -84,6 +84,7 @@ def candidate_generate(train_data,remaining,num,args):
 			dep += aux.linear_dependence(dat,lag)
 		dep = (dep.T + dep)*0.5
 		dep = aux.normalize_corr_mat(dep)
+		dep = np.abs(dep)
 		print("Correlation matrix: ")
 		aux.print_mat(dep)
 
@@ -173,8 +174,8 @@ def evaluate(pred,gt,evaluate_on,args):
 		gt_mat = gt_mat[:,evaluate_on]
 		pred_mat = pred_mat[:,evaluate_on]
 
-		gt_mat,gt_mean,gt_std = pp.normalize(gt_mat,return_mean_std=True)
-		pred_mat = pp.normalize_ref(pred_mat,gt_mean,gt_std)
+		#gt_mat,gt_mean,gt_std = pp.normalize(gt_mat,return_mean_std=True,leave_zero=True)
+		#pred_mat = pp.normalize_ref(pred_mat,gt_mean,gt_std)
 		diff = pred_mat-gt_mat 
 		fro = np.linalg.norm(diff)
 		rms = fro/np.sqrt(np.size(pred_mat))
@@ -235,7 +236,7 @@ def subgroup_select(mod,models,args):
 def settings(args):
 	num_series = 10
 
-	settings = {"min_subgroup_length": 3, "max_subgroup_length": 6, "subgroup_length": 17, # general
+	settings = {"min_subgroup_length": 3, "max_subgroup_length": 6, "subgroup_length": 3, # general
 				"VARMA_p": 2, "VARMA_q": 0, "ARMA_q": 2, # VARMA orders
 				"re_series": np.logspace(-1,-6,num_series), "rw_series": 500*np.logspace(0,-1,num_series), # VARMA training
 				"num_timepoints": 1000, "num_samples": 50, "case": "case4" # VARMA sim
@@ -244,13 +245,13 @@ def settings(args):
 	args.settings = settings
 
 def subgroup(data,args):
-	train_data,test_data = pp.split(data,args.split_method,train_share=0.6)
+	train_data,test_data = pp.split(data,args.split_method,train_share=0.6,test_share=0.4)
 	print(len(train_data))
 
 	N = aux.num_features(data[0])
 	sub_col = aux.Subgroup_collection(N,[])
 	#for i in range(1):
-	num = 20
+	num = 1
 	cands = candidate_generate(train_data,sub_col.get_remaining(),num,args)
 	#for cand in cands:
 	#	print(cand)
@@ -271,14 +272,14 @@ def subgroup(data,args):
 		#for mod in mods:
 		#	print(mod.q)
 		sub_col.add(mods,"CANDIDATES")
-		subgroup_score(train_data,test_data,sub_col,args)
+		#subgroup_score(train_data,test_data,sub_col,args)
 		#if not subgroup_select(mods,sub_col,args):
 		#	sub_col.remove_mods(mods)
 		
-		#rem = baseline_remain(train_data,sub_col,"ARMA_PARALLEL",args)
-		#sub_col.add(rem,"REMAINING")
+		rem = baseline_remain(train_data,sub_col,"ARMA_PARALLEL",args)
+		sub_col.add(rem,"REMAINING")
 
-		#subgroup_score(train_data,test_data,sub_col,args)
+		subgroup_score(train_data,test_data,sub_col,args)
 
 		sub_col.reset()
 	

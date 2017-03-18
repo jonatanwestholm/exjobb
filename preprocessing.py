@@ -76,30 +76,50 @@ def normalize_all(data,leave_zero=False):
 	__,dat_mean,dat_std = normalize(np.concatenate(data,axis=0),return_mean_std=True,leave_zero=leave_zero)
 	return [normalize_ref(dat,dat_mean,dat_std) for dat in data]
 
-def only_numeric(data):	
-	first_row = data[0][0,:]
-	is_numeric = np.array([not np.isnan(elem) for elem in first_row],dtype=bool)
-	only_num = [dat[:,is_numeric] for dat in data]
-	return only_num
+#def only_numeric(data):	
+#	first_row = data[0][0,:]
+#	is_numeric = [elem for elem in first_row if not np.isfinite(elem)]
+#	only_num = [dat[:,is_numeric] for dat in data]
+#	return only_num,is_numeric
 
-def remove_unchanging(data):
+def count_numeric(arr):
+	return np.sum(np.isfinite(arr))
+
+def numeric_idxs(data):	
+	first_row = data[0][0,:]
+	is_numeric = [i for i,elem in enumerate(first_row) if np.isfinite(elem)]
+	#only_num = [dat[:,is_numeric] for dat in data]
+	return is_numeric
+
+def changing_idxs(data):
 	dat0 = data[0]
 	dat_std = [np.std(feat) for feat in dat0.T]
 	#print(dat_std)
 	changing = [i for i,item in enumerate(dat_std) if item > 10**-8]
-	print(changing)
+	#print(changing)
 
-	data = [dat[:,changing] for dat in data]
+	return changing
 
-	return data,changing
 
 ## Managing data
+
+def remove_small_samples(data,limit):
+	return [dat for dat in data if np.shape(dat)[0] > limit]
 
 def has_missing(dat):
 	return np.any(np.isnan(dat))
 
 def remove_instances_with_missing(data):
-	return [dat for dat in data if not has_missing(dat)]
+	no_missing = [i for i in range(len(data)) if not has_missing(data[i])]
+	data = [data[i] for i in no_missing]
+	return data,no_missing
+
+def remove_unchanging(data):
+	changing = changing_idxs(data)
+
+	data = [dat[:,changing] for dat in data]
+
+	return data,changing
 
 # split data into train and test
 def split(data,split_method,train_share=0.6,test_share=0.2):

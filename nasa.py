@@ -141,7 +141,7 @@ def main(args):
 
 			data,changing = pp.remove_unchanging(data)
 			data = pp.normalize_all(data)
-			data,__ = pp.split(data,"TIMEWISE",train_share=0.2)
+			data,__ = pp.split(data,"TIMEWISE",train_share=0.4)
 			#print(changing)
 			explanations = [explanations[i] for i in changing]
 			return data,explanations
