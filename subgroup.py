@@ -27,11 +27,12 @@ import backblaze
 # preprocessing is dataset specific so it's handled in separate scripts
 def preprocess(args):
 	dataset = args.dataset.upper()
+	names = ""
 
 	if dataset in ["TURBOFAN","MILL","IGBT"]:
 		data,explanations = nasa.main(args)
 	elif dataset == "BACKBLAZE":
-		data,explanations = backblaze.main(args)
+		data,explanations,names = backblaze.main(args)
 	#elif dataset == "ARMA_SIM":
 	#	data = sim.arma_sim(np.array([1]),np.array([1,0.5,-0.2]),1000,num=5)
 	elif dataset == "VARMA_SIM":
@@ -51,6 +52,7 @@ def preprocess(args):
 		print("No matching dataset!")
 
 	args.explanations = explanations
+	args.names = names
 
 	return data
 
@@ -169,6 +171,7 @@ def test(train_data,test_data,models,args):
 # this function should be split into two: one evaluate() and one present()
 def evaluate(pred,gt,evaluate_on,args):
 	rmses = []
+	j = 0
 	for pred_mat,gt_mat in zip(pred,gt):
 		#print(pred_mat)
 		gt_mat = gt_mat[:,evaluate_on]
@@ -180,18 +183,24 @@ def evaluate(pred,gt,evaluate_on,args):
 		fro = np.linalg.norm(diff)
 		rms = fro/np.sqrt(np.size(pred_mat))
 		rmses.append(rms)
-		print("RMS norm of error: {0:.3f}".format(rms))
+		if args.test_names:
+			print("{0:s}, RMS norm of error: {1:.3f}".format(args.test_names[j],rms))
+		else:
+			print("RMS norm of error: {0:.3f}".format(rms))
 		
-		if args.plot:
+		if args.plot or j > 7:
 			for i,feature in enumerate(evaluate_on):
 				plt.figure()
 				plt.title(args.explanations[feature])
 				plt.plot(pred_mat[:,i],'b')
 				plt.plot(gt_mat[:,i],'r')
-				plt.legend(["Predicted", "Ground Truth"])
+				plt.plot(diff[:,i],'g')
+				plt.legend(["Predicted", "Ground Truth","Residual"])
 				plt.xlabel("Time")
 				plt.ylabel("Value")
 			plt.show()
+
+		j+=1
 		
 	rmses = np.array(rmses)
 	print("Avg: {0:.3f}, Min: {1:.3f}, Max: {2:.3f}".format(np.mean(rmses),np.min(rmses),np.max(rmses)))
@@ -239,13 +248,15 @@ def settings(args):
 	settings = {"min_subgroup_length": 3, "max_subgroup_length": 6, "subgroup_length": 3, # general
 				"VARMA_p": 2, "VARMA_q": 0, "ARMA_q": 2, # VARMA orders
 				"re_series": np.logspace(-1,-6,num_series), "rw_series": 500*np.logspace(0,-1,num_series), # VARMA training
-				"num_timepoints": 1000, "num_samples": 50, "case": "case4" # VARMA sim
+				"num_timepoints": 1000, "num_samples": 50, "case": "case2" # VARMA sim
 				}
 
 	args.settings = settings
 
 def subgroup(data,args):
-	train_data,test_data = pp.split(data,args.split_method,train_share=0.6,test_share=0.4)
+	train_data,test_data,train_names,test_names = pp.split(data,args.split_method,train_share=0.6,test_share=0.4,names=args.names,return_names=True)
+	args.train_names = train_names
+	args.test_names = test_names
 	print(len(train_data))
 
 	N = aux.num_features(data[0])
@@ -283,7 +294,6 @@ def subgroup(data,args):
 
 		sub_col.reset()
 	
-
 def main(args):
 	settings(args)
 	data = preprocess(args)

@@ -11,10 +11,13 @@ import time
 import smart_explanations
 import preprocessing as pp
 
-BB_SMART_order = [1,2,3,4,5,7,8,9,10,11,12,13,15,22,183,184,187,188	,189,190,191,192,193,194,195,196,197,198,199,200,201,220,222,223,224,225,226,240,241,242,250,251,252,254,255]
+BB_SMART_order = [1,2,3,4,5,7,8,9,10,11,12,13,15,22,183,184,187,188,189,190,191,192,193,194,195,196,197,198,199,200,201,220,222,223,224,225,226,240,241,242,250,251,252,254,255]
 normalized_idx = list(range(5,95,2))
 
 min_sample_time = 30
+
+def just_the_names(filenames):
+	return [filename.split('/')[-1][:-4] for filename in filenames]
 
 def all_smart_except(remove):
 	#N = np.shape(data[0])[1]
@@ -141,6 +144,8 @@ def main(args):
 
 		else:
 			data = [dat[:,normalized_idx] for dat in data]
+			data = pp.differentiate(data)
+			
 			idxs = set(all_smart_except([194]))
 			#print(idxs)
 			#print(set(pp.numeric_idxs(data)))
@@ -156,11 +161,11 @@ def main(args):
 			data = pp.remove_small_samples(data,min_sample_time)
 			print("after removing missing and small: "+ str(len(data)))
 
-			data = pp.normalize_all(data)
+			data = pp.normalize_all(data,leave_zero=True)
 			print("Qualified indexes: " + str(sorted(idxs)))
 			print("Explanations: " + str(explanations))
 
-			return data,explanations
+			return data,explanations,just_the_names(filenames)
 			
 	elif datatype == "INSTANCE":
 		pattern = '[0-9-]*.csv'

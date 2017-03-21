@@ -3,6 +3,7 @@
 
 import numpy as np
 import copy
+import time
 
 def is_tensor(X,order=2):
 	#print(X)
@@ -112,21 +113,7 @@ class VARMA(MTS_Model):
 			return
 		if k == 1:
 			LSS_C = self.make_block([self.A,self.C])
-			#print(LSS_C)
-			'''
-			print("Y:")
-			print(self.Y)
-			print("E:")
-			print(self.E)
-			'''
 			LSS_X = self.make_column([self.Y,self.E])
-			#print(LSS_X)
-			'''
-			print("LSS_C")
-			print(LSS_C)
-			print("LSS_X")
-			print(LSS_X)
-			'''
 			return np.dot(LSS_C,LSS_X)
 		else:
 			# wasteful indeed but simple and correct according to book (Jakobsson2015, 8.148)
@@ -137,20 +124,9 @@ class VARMA(MTS_Model):
 				y = self.predict(1).T[0]
 				#print(np.shape(y))
 				self.update(y) 
-				'''
-				print("Y:")
-				print(self.Y)
-				print("E:")
-				print(self.E)
-				'''
 				return self.predict(k-1,protected=False)
 
 	def learn_private(self,y):
-		#print(self.Y)
-		#print(self.E)
-		#print(self.Y + self.E)
-		#print(self.Y)
-		#print(self.E)
 		if self.q:
 			x = self.make_column([self.Y,self.E])
 		else:
@@ -159,22 +135,12 @@ class VARMA(MTS_Model):
 		for i in range(self.k):
 			learner = self.learners[i]
 			theta = learner.update(y[i],x.T) 
-			#print(self.p)
-			#print(learner.theta)
-			#print(self.A[i,:])
-			#print(self.k)
-			#print(i)
-			#print(theta)
 			if self.p:
 				self.A[i,:] = theta[:self.k*self.p].T
 			if self.q:
 				self.C[i,:] = theta[self.k*self.p:].T
 		self.update(y)
 
-		#print("A:")
-		#print(self.A)
-		#print("C:")
-		#print(self.C)
 		return self.A,self.C
 
 	def learn(self,Y):
@@ -216,30 +182,26 @@ class VARMA(MTS_Model):
 			C_hist = np.concatenate([C_hist,C_h],axis=0)
 			i+=1
 
-		A_hist = A_hist[1:]
-		C_hist = C_hist[1:]
+		#A_hist = A_hist[1:]
+		#C_hist = C_hist[1:]
 
 		return A_hist,C_hist
 
-	def ruminate(self,data,re_series,rw_series,iterations,meta_series):
-		k = self.k
-		p = self.p
-		q = self.q
-		
-		A_hist = np.zeros([1,k,k*p])
-		C_hist = np.zeros([1,k,k*q])
-		self.initiate_kalman(re_series[0],rw_series[0])
-		for i in range(iterations):
-			self.reset()
-			start = 0 #random.randint(0,200)
-			A_h,C_h = self.annealing(data[start:],meta_series[i]*re_series,rw_series)
-			A_hist = np.concatenate([A_hist,A_h],axis=0)
-			C_hist = np.concatenate([C_hist,C_h],axis=0)
-
-		A_hist = A_hist[1:]
-		C_hist = C_hist[1:]		
-			
-		return A_hist,C_hist
+	def set_A_C(self,A,C):
+		self.A = A
+		self.C = C
+		for i in range(self.k):
+			learner = self.learners[i]
+			if self.k > 1:
+				A_row = A[i,:]
+				C_row = C[i,:]
+			else:
+				A_row = A
+				C_row = C
+			if self.q:
+				learner.set_X(self.make_block([A_row,C_row]))
+			else:
+				learner.set_X(A_row)
 
 # helps with learning
 # an object whose states is the weights of other models
@@ -296,4 +258,15 @@ class Kalman:
 		self.Rxx = np.dot(self.A,np.dot(Rxx1,self.A.T)) + self.Re
 		self.Ryy = (np.dot(self.C,np.dot(Rxx1,self.C.T)) + self.Rw).astype(dtype='float64') 
 
+		'''
+		if np.linalg.norm(self.X) > 10:
+			print(self.X)
+			print(self.Re)
+			print(self.Rw)
+			time.sleep(0.5)
+		'''
+
 		return self.X
+
+	def set_X(self,X):
+		self.X = X

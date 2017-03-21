@@ -53,28 +53,35 @@ def filter_wrt_function(data,condition):
 
 ## Mathematical operations
 
-def normalize(dat,return_mean_std=False,leave_zero=False):
+def differentiate(data):
+	return [np.diff(dat,axis=0) for dat in data]
+
+def normalize(dat,return_mean_max=False,leave_zero=False):
 	dat_mean = [np.mean(feat) for feat in dat.T]
-	dat_std = [np.std(feat) for feat in dat.T]
+	dat = np.array([feat-feat_mean for feat,feat_mean in zip(dat.T,dat_mean)]).T
+	dat_max = [np.max(np.abs(feat)) for feat in dat.T]
+	#dat_max = [np.std(feat) for feat in dat.T]
 
 	if leave_zero:
-		for i,stdev in enumerate(dat_std):
-			if stdev < 10**-8:
-				dat_std[i] = 1
+		for i,feat_max in enumerate(dat_max):
+			if feat_max< 10**-8:
+				dat_max[i] = 1
 
-	dat = np.array([(feat - feat_mean)/feat_std for feat,feat_mean,feat_std in zip(dat.T,dat_mean,dat_std)]).T
+	dat = np.array([feat/feat_max for feat,feat_max in zip(dat.T,dat_max)]).T
 
-	if return_mean_std:
-		return dat,dat_mean,dat_std
+	if return_mean_max:
+		return dat,dat_mean,dat_max
 	else:
 		return dat
 
-def normalize_ref(dat,dat_mean,dat_std):
-	return np.array([(feat - feat_mean)/feat_std for feat,feat_mean,feat_std in zip(dat.T,dat_mean,dat_std)]).T	
+def normalize_ref(dat,dat_mean,dat_max):
+	return np.array([(feat - feat_mean)/feat_max for feat,feat_mean,feat_max in zip(dat.T,dat_mean,dat_max)]).T	
 
 def normalize_all(data,leave_zero=False):
-	__,dat_mean,dat_std = normalize(np.concatenate(data,axis=0),return_mean_std=True,leave_zero=leave_zero)
-	return [normalize_ref(dat,dat_mean,dat_std) for dat in data]
+	__,dat_mean,dat_max = normalize(np.concatenate(data,axis=0),return_mean_max=True,leave_zero=leave_zero)
+	print(dat_mean)
+	print(dat_max)
+	return [normalize_ref(dat,dat_mean,dat_max) for dat in data]
 
 #def only_numeric(data):	
 #	first_row = data[0][0,:]
@@ -92,14 +99,13 @@ def numeric_idxs(data):
 	return is_numeric
 
 def changing_idxs(data):
-	dat0 = data[0]
+	dat0 = np.concatenate(data,axis=0)
 	dat_std = [np.std(feat) for feat in dat0.T]
 	#print(dat_std)
 	changing = [i for i,item in enumerate(dat_std) if item > 10**-8]
 	#print(changing)
 
 	return changing
-
 
 ## Managing data
 
@@ -122,20 +128,37 @@ def remove_unchanging(data):
 	return data,changing
 
 # split data into train and test
-def split(data,split_method,train_share=0.6,test_share=0.2):
+def split(data,split_method,train_share=0.6,test_share=0.2,names="",return_names=False):
 	split_method = split_method
 	if split_method == "TIMEWISE":	
 		#train_share = 0.6
 		#test_share = 0.2
-		train_data = [dat[0:int(np.floor(train_share*np.shape(dat)[0])),:] for dat in data]
-		test_data = [dat[int(np.floor(train_share*np.shape(dat)[0])):int(np.floor((train_share+test_share)*np.shape(dat)[0])),:] for dat in data]
+		N = [np.shape(dat)[0] for dat in data]
+		Split1 = [int(np.floor(train_share*n)) for n in N]
+		Split2 = [int(np.floor((train_share+test_share)*n)) for n in N] 
+
+		train_data = [dat[0:split1,:] for dat,split1 in zip(data,Split1)]
+		test_data = [dat[split1:split2,:] for dat,split1,split2 in zip(data,Split1,Split2)]
+
+		train_names = names
+		test_names = names
 	elif split_method == "UNITWISE":
 		#train_share = 0.2
 		#test_share = 0.2
-		train_data = data[0:int(np.floor(train_share*len(data)))]
-		test_data = data[int(np.floor(train_share*len(data))):int(np.floor((train_share+test_share)*len(data)))]		
+		N = len(data)
+		split1 = int(np.floor(train_share*N))
+		split2 = int(np.floor((train_share+test_share)*N))
 
-	return train_data,test_data
+		train_data = data[0:split1]
+		test_data = data[split1:split2]
+
+		train_names = names[0:split1]
+		test_names = names[split1:split2]
+
+	if return_names:
+		return train_data,test_data,train_names,test_names
+	else:
+		return train_data,test_data
 
 ## Visualizations
 

@@ -75,8 +75,8 @@ for i in range(1):
 	C_hist.extend(C_h)
 '''
 
-num_series = 100
-iterations = 1 #int(10000/N)
+num_series = 10
+0iterations = 1 #int(10000/N)
 re_series = np.logspace(-1,-10,num_series)
 rw_series = 500*np.logspace(0,-1,num_series)
 meta_series = np.logspace(0,0,iterations)
