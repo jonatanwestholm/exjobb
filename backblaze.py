@@ -143,9 +143,9 @@ def main(args):
 			plt.show()
 
 		else:
+			# Data selection
 			data = [dat[:,normalized_idx] for dat in data]
-			data = pp.differentiate(data)
-			
+
 			idxs = set(all_smart_except([194]))
 			#print(idxs)
 			#print(set(pp.numeric_idxs(data)))
@@ -160,6 +160,10 @@ def main(args):
 			data,__ = pp.remove_instances_with_missing(data)
 			data = pp.remove_small_samples(data,min_sample_time)
 			print("after removing missing and small: "+ str(len(data)))
+
+			# Mathematical preprocessing			
+			data = pp.differentiate(data)
+			#data = pp.smooth(data,5)
 
 			data = pp.normalize_all(data,leave_zero=True)
 			print("Qualified indexes: " + str(sorted(idxs)))

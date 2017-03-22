@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import scipy.io
 import glob
 import time
+import scipy.signal as ssignal
 
 ## I/O
 
@@ -56,18 +57,24 @@ def filter_wrt_function(data,condition):
 def differentiate(data):
 	return [np.diff(dat,axis=0) for dat in data]
 
+def smooth(data,length):
+	C = np.array([1]*length)
+	A = 1
+	return [ssignal.filtfilt(C,A,dat.T).T for dat in data]
+
 def normalize(dat,return_mean_max=False,leave_zero=False):
 	dat_mean = [np.mean(feat) for feat in dat.T]
 	dat = np.array([feat-feat_mean for feat,feat_mean in zip(dat.T,dat_mean)]).T
-	dat_max = [np.max(np.abs(feat)) for feat in dat.T]
-	#dat_max = [np.std(feat) for feat in dat.T]
+	#dat_max = [np.max(np.abs(feat)) for feat in dat.T]
+	dat_max = [np.std(feat) for feat in dat.T]
 
 	if leave_zero:
 		for i,feat_max in enumerate(dat_max):
-			if feat_max< 10**-8:
+			if feat_max < 10**-8:
 				dat_max[i] = 1
 
 	dat = np.array([feat/feat_max for feat,feat_max in zip(dat.T,dat_max)]).T
+	#dat = np.array([(feat-0)/feat_max for feat,feat_max in zip(dat.T,dat_max)]).T
 
 	if return_mean_max:
 		return dat,dat_mean,dat_max
@@ -76,11 +83,12 @@ def normalize(dat,return_mean_max=False,leave_zero=False):
 
 def normalize_ref(dat,dat_mean,dat_max):
 	return np.array([(feat - feat_mean)/feat_max for feat,feat_mean,feat_max in zip(dat.T,dat_mean,dat_max)]).T	
+	#return np.array([(feat - 0)/feat_max for feat,feat_mean,feat_max in zip(dat.T,dat_mean,dat_max)]).T	
 
 def normalize_all(data,leave_zero=False):
 	__,dat_mean,dat_max = normalize(np.concatenate(data,axis=0),return_mean_max=True,leave_zero=leave_zero)
-	print(dat_mean)
-	print(dat_max)
+	#print(dat_mean)
+	#print(dat_max)
 	return [normalize_ref(dat,dat_mean,dat_max) for dat in data]
 
 #def only_numeric(data):	

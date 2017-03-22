@@ -12,6 +12,9 @@ import time
 import preprocessing as pp
 import nasa_explanations
 
+def all_features_except(N,remove):
+	return [i for i in range(N) if not i in remove]	
+
 def display_sequential(data,explanations,run_to_fail=False,accumulative=False):
 	num_features = np.shape(data[0])[-1]
 
@@ -128,7 +131,6 @@ def main(args):
 			run_to_fail = False
 			accumulative = True
 
-
 		if __name__ == '__main__':
 			if datatype == "SEQUENTIAL":
 				display_sequential(data,explanations,run_to_fail,accumulative)
@@ -138,12 +140,26 @@ def main(args):
 					data = data[:max_plots]
 				pp.display_parallel(data,explanations)
 		else:
+			# Data selection
+			N = np.shape(data[0])[1]
+			idxs = set(all_features_except(N,[0,1]))
+			#print(idxs)
+			#print(set(pp.numeric_idxs(data)))
+			idxs = set.intersection(idxs,set(pp.numeric_idxs(data)))
+			#print(idxs)
+			idxs = set.intersection(idxs,set(pp.changing_idxs(data)))
 
-			data,changing = pp.remove_unchanging(data)
-			data = pp.normalize_all(data)
-			data,__ = pp.split(data,"TIMEWISE",train_share=0.4)
+			data = [dat[:,sorted(idxs)] for dat in data]
+			explanations = [explanations[i] for i in sorted(idxs)]
+
+			data,__ = pp.split(data,"TIMEWISE",train_share=0.6)
+			#data = pp.normalize_all(data)
+
+			# Mathematical preprocessing
+			data = [pp.normalize(dat,leave_zero=True) for dat in data]
+
 			#print(changing)
-			explanations = [explanations[i] for i in changing]
+			print(explanations)
 			return data,explanations
 
 	else:	

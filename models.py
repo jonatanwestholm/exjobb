@@ -258,13 +258,17 @@ class Kalman:
 		self.Rxx = np.dot(self.A,np.dot(Rxx1,self.A.T)) + self.Re
 		self.Ryy = (np.dot(self.C,np.dot(Rxx1,self.C.T)) + self.Rw).astype(dtype='float64') 
 
-		'''
+		
 		if np.linalg.norm(self.X) > 10:
-			print(self.X)
-			print(self.Re)
-			print(self.Rw)
-			time.sleep(0.5)
-		'''
+			self.X = np.zeros([self.N,1])
+			self.Rxx = self.Re
+			self.Ryy = self.Rw
+			print("reset X")
+			#print(self.X)
+			#print(self.Re)
+			#print(self.Rw)
+			#time.sleep(0.5)
+		
 
 		return self.X
 

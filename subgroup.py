@@ -38,7 +38,7 @@ def preprocess(args):
 	elif dataset == "VARMA_SIM":
 		if args.filename:
 			data = sim.read(args)
-			#data = [pp.normalize(dat) for dat in data]
+			data = [pp.normalize(dat) for dat in data]
 		else:
 			num_timepoints = args.settings["num_timepoints"]
 			num_samples = args.settings["num_samples"]
@@ -54,6 +54,8 @@ def preprocess(args):
 	args.explanations = explanations
 	args.names = names
 
+	aux.whiteness_test(data,explanations)
+
 	return data
 
 ## Candidate Generation
@@ -65,6 +67,8 @@ def candidate_generate(train_data,remaining,num,args):
 	if gen == "TRIVIAL":
 		cand = list(range(N))
 		cands = [aux.map_idx(remaining,cand)]*num # subgroups won't be edited, only read
+	elif gen == "CUSTOM":
+		cands = [[5,2,16]]
 	elif gen == "RANDOM":
 		# take out random 
 		cands = []
@@ -99,11 +103,10 @@ def candidate_generate(train_data,remaining,num,args):
 ## Training
 
 # returns models = [obj]
-def train(data,subgroup,args):
+def train(data,subgroup,train_type,args):
 	#print(np.shape(data[0]))
 	N = aux.num_features(data[0])
 
-	train_type = args.model
 	if train_type == "TRIVIAL":
 		mod = Models.Trivial()
 		mod.subgroup = subgroup
@@ -123,10 +126,10 @@ def train(data,subgroup,args):
 
 	return mods
 
-def subgroup_learn(train_data,subgroup,args):
+def subgroup_learn(train_data,subgroup,train_type,args):
 	#print(type(subgroup))
 	if subgroup:
-		mods = train([dat[:,subgroup] for dat in train_data],subgroup,args)
+		mods = train([dat[:,subgroup] for dat in train_data],subgroup,train_type,args)
 		return mods
 	else:
 		return []
@@ -152,15 +155,18 @@ def test(train_data,test_data,models,args):
 	pred = []
 	if test_type == "PREDICTION":
 		# take prediction unit by unit - units are assumed to be independent
-		for tr_dat,test_dat in zip(train_data,test_data):
-			# reset all inner states first
-			aux.reset_models(models)
-
-			# set states of models
-			if split_method == "TIMEWISE":
+		
+		# reset all inner states first
+		aux.reset_models(models)
+		if split_method == "TIMEWISE":	
+			for tr_dat,test_dat in zip(train_data,test_data):
+				# set states of models
 				aux.update_models(tr_dat,models)
 
-			pred.append(aux.predict_data(test_dat,models,k))
+				pred.append(aux.predict_data(test_dat,models,k))
+		elif split_method == "UNITWISE":
+			for test_dat in test_data:
+				pred.append(aux.predict_data(test_dat,models,k))			
 
 	elif test_type == "CLASSIFICATION":
 		pass # how to do this with subgroups? not my problem for now
@@ -183,15 +189,16 @@ def evaluate(pred,gt,evaluate_on,args):
 		fro = np.linalg.norm(diff)
 		rms = fro/np.sqrt(np.size(pred_mat))
 		rmses.append(rms)
+		
 		if args.test_names:
 			print("{0:s}, RMS norm of error: {1:.3f}".format(args.test_names[j],rms))
 		else:
 			print("RMS norm of error: {0:.3f}".format(rms))
 		
-		if args.plot or j > 7:
+		if args.plot:
 			for i,feature in enumerate(evaluate_on):
 				plt.figure()
-				plt.title(args.explanations[feature])
+				plt.title(args.explanations[feature]+". {0:d}-step prediction.".format(int(args.pred_k)))
 				plt.plot(pred_mat[:,i],'b')
 				plt.plot(gt_mat[:,i],'r')
 				plt.plot(diff[:,i],'g')
@@ -248,51 +255,56 @@ def settings(args):
 	settings = {"min_subgroup_length": 3, "max_subgroup_length": 6, "subgroup_length": 3, # general
 				"VARMA_p": 2, "VARMA_q": 0, "ARMA_q": 2, # VARMA orders
 				"re_series": np.logspace(-1,-6,num_series), "rw_series": 500*np.logspace(0,-1,num_series), # VARMA training
-				"num_timepoints": 1000, "num_samples": 50, "case": "case2" # VARMA sim
+				"num_timepoints": 1000, "num_samples": 50, "case": "case2", # VARMA sim
+				"train_share": 0.2, "test_share": 0.2 # splitting
 				}
 
 	args.settings = settings
 
 def subgroup(data,args):
-	train_data,test_data,train_names,test_names = pp.split(data,args.split_method,train_share=0.6,test_share=0.4,names=args.names,return_names=True)
+	train_data,test_data,train_names,test_names = pp.split(data,args.split_method,train_share=args.settings["train_share"],test_share=args.settings["test_share"],names=args.names,return_names=True)
 	args.train_names = train_names
 	args.test_names = test_names
 	print(len(train_data))
 
+	'''
 	N = aux.num_features(data[0])
 	sub_col = aux.Subgroup_collection(N,[])
 	#for i in range(1):
-	num = 1
+	num = 10
 	cands = candidate_generate(train_data,sub_col.get_remaining(),num,args)
 	#for cand in cands:
 	#	print(cand)
 
-	'''
-	legends = []
-	print(args.explanations)
-	for feature in [1,2,5]:
-		plt.plot(data[0][:,feature])
-		legends.append(args.explanations[feature])
-	plt.legend(legends)
-	plt.show()
-	'''
+	if 0:
+		legends = []
+		print(args.explanations)
+		for feature in [1,2,5]:
+			plt.plot(data[0][:,feature])
+			legends.append(args.explanations[feature])
+		plt.legend(legends)
+		plt.show()
+		
 
 	for cand in cands:
 		print(cand)
-		mods = subgroup_learn(train_data,cand,args)
-		#for mod in mods:
-		#	print(mod.q)
-		sub_col.add(mods,"CANDIDATES")
-		#subgroup_score(train_data,test_data,sub_col,args)
-		#if not subgroup_select(mods,sub_col,args):
-		#	sub_col.remove_mods(mods)
-		
-		rem = baseline_remain(train_data,sub_col,"ARMA_PARALLEL",args)
-		sub_col.add(rem,"REMAINING")
+		for model in ["ARMA_PARALLEL","VARMA","TRIVIAL"]:
+			print(model)
+			mods = subgroup_learn(train_data,cand,model,args)
+			#for mod in mods:
+			#	print(mod.q)
+			sub_col.add(mods,"CANDIDATES")
+			subgroup_score(train_data,test_data,sub_col,args)
 
-		subgroup_score(train_data,test_data,sub_col,args)
+			sub_col.reset()
+			#if not subgroup_select(mods,sub_col,args):
+			#	sub_col.remove_mods(mods)
+			
+			#rem = baseline_remain(train_data,sub_col,"ARMA_PARALLEL",args)
+			#sub_col.add(rem,"REMAINING")
 
-		sub_col.reset()
+			#subgroup_score(train_data,test_data,sub_col,args)
+	'''
 	
 def main(args):
 	settings(args)
