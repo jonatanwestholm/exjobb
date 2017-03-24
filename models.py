@@ -4,6 +4,7 @@
 import numpy as np
 import copy
 import time
+import sklearn.svm as svm
 
 def is_tensor(X,order=2):
 	#print(X)
@@ -268,9 +269,43 @@ class Kalman:
 			#print(self.Re)
 			#print(self.Rw)
 			#time.sleep(0.5)
-		
 
 		return self.X
 
 	def set_X(self,X):
 		self.X = X
+
+class SVM_TS:
+	def __init__(self,subgroup,pos_w,style):
+		self.subgroup = subgroup
+		self.pos_w = pos_w
+		self.style = style
+		self.reset()
+
+	def reset(self):
+		self.X = np.array([[]]*len(self.subgroup)).T
+		self.y = np.array([[]]).T
+		self.w = np.array([[]]).T 
+		if self.style == "SVC":
+			self.sv = svm.SVC()
+		elif self.style == "SVR":
+			self.sv = svm.SVR()
+
+	def update(self,X,y):
+		if self.style == "SVC":
+			w = np.ones_like(y)
+			w[y==1] = self.pos_w
+		elif self.style == "SVR":
+			w = 1/(y+1/self.pos_w)
+
+		self.X = np.concatenate([self.X,X])
+		self.y = np.concatenate([self.y,y])
+		self.w = np.concatenate([self.w,w])
+
+	def train(self,return_score=False):
+		self.sv.fit(self.X,np.ravel(self.y),np.ravel(self.w))
+		if return_score:
+			return self.sv.score(self.X,np.ravel(self.y),np.ravel(self.w))
+
+	def predict(self,dat):
+		return self.sv.predict(dat)

@@ -25,7 +25,7 @@ import backblaze
 
 # returns data = [np.array()]
 # preprocessing is dataset specific so it's handled in separate scripts
-def preprocess(args):
+def fetch(args):
 	dataset = args.dataset.upper()
 	names = ""
 
@@ -54,7 +54,10 @@ def preprocess(args):
 	args.explanations = explanations
 	args.names = names
 
-	aux.whiteness_test(data,explanations)
+	#for dat,name in zip(data,names):
+	#	print(name)
+	#	aux.whiteness_test([dat],explanations)
+	#aux.whiteness_test(data,explanations)
 
 	return data
 
@@ -68,7 +71,10 @@ def candidate_generate(train_data,remaining,num,args):
 		cand = list(range(N))
 		cands = [aux.map_idx(remaining,cand)]*num # subgroups won't be edited, only read
 	elif gen == "CUSTOM":
-		cands = [[5,2,16]]
+		#cands = [[8,13,15,18,19,21]] # turbofan 2
+		cand = [2,6,9,10,11]
+		ext = [] #[elem+12 for elem in cand]
+		cands = [cand + ext]
 	elif gen == "RANDOM":
 		# take out random 
 		cands = []
@@ -123,6 +129,14 @@ def train(data,subgroup,train_type,args):
 		re_series = args.settings["re_series"]
 		rw_series = args.settings["rw_series"]
 		mods = [aux.train_varma([dat[:,i] for dat in data],[subgroup[i]],p,q,re_series,rw_series) for i in range(N)]
+	elif train_type == "SVM":
+		mod = Models.SVM_TS(subgroup,args.settings["pos_w"],args.settings["style"])
+		for X,y in aux.impending_failure(data,args.train_names,args.dataset,args.settings["failure_horizon"],mod.style):
+			mod.update(X,y)
+
+		mod.train()
+
+		mods = [mod]
 
 	return mods
 
@@ -153,6 +167,7 @@ def test(train_data,test_data,models,args):
 	split_method = args.split_method
 
 	pred = []
+	labels = []
 	if test_type == "PREDICTION":
 		# take prediction unit by unit - units are assumed to be independent
 		
@@ -166,48 +181,65 @@ def test(train_data,test_data,models,args):
 				pred.append(aux.predict_data(test_dat,models,k))
 		elif split_method == "UNITWISE":
 			for test_dat in test_data:
-				pred.append(aux.predict_data(test_dat,models,k))			
+				pred.append(aux.predict_data(test_dat,models,k))
 
 	elif test_type == "CLASSIFICATION":
-		pass # how to do this with subgroups? not my problem for now
+		if args.model == "SVM":
+			mod = models[0] # assume that there is just one at first
+			#print(len(test_data))
+			#print(len(args.test_names))
+			for X,y in aux.impending_failure(test_data,args.train_names,args.dataset,args.settings["failure_horizon"],mod.style):
+				X = X[:,mod.subgroup]
+				pred.append(mod.predict(X))
+				labels.append(y)
 
-	return pred
+			#pred = np.concatenate(pred)
+			#labels = np.concatenate(labels)
+
+	return pred,labels
 
 # outputs performance scores, plots
 # this function should be split into two: one evaluate() and one present()
 def evaluate(pred,gt,evaluate_on,args):
+	test_type = args.test_type.upper()
 	rmses = []
 	j = 0
-	for pred_mat,gt_mat in zip(pred,gt):
-		#print(pred_mat)
-		gt_mat = gt_mat[:,evaluate_on]
-		pred_mat = pred_mat[:,evaluate_on]
 
-		#gt_mat,gt_mean,gt_std = pp.normalize(gt_mat,return_mean_std=True,leave_zero=True)
-		#pred_mat = pp.normalize_ref(pred_mat,gt_mean,gt_std)
-		diff = pred_mat-gt_mat 
-		fro = np.linalg.norm(diff)
-		rms = fro/np.sqrt(np.size(pred_mat))
-		rmses.append(rms)
-		
-		if args.test_names:
-			print("{0:s}, RMS norm of error: {1:.3f}".format(args.test_names[j],rms))
-		else:
-			print("RMS norm of error: {0:.3f}".format(rms))
-		
-		if args.plot:
-			for i,feature in enumerate(evaluate_on):
-				plt.figure()
-				plt.title(args.explanations[feature]+". {0:d}-step prediction.".format(int(args.pred_k)))
-				plt.plot(pred_mat[:,i],'b')
-				plt.plot(gt_mat[:,i],'r')
-				plt.plot(diff[:,i],'g')
-				plt.legend(["Predicted", "Ground Truth","Residual"])
-				plt.xlabel("Time")
-				plt.ylabel("Value")
-			plt.show()
+	if test_type == "PREDICTION":
+		for pred_mat,gt_mat in zip(pred,gt):
+			#print(pred_mat)
+			gt_mat = gt_mat[:,evaluate_on]
+			pred_mat = pred_mat[:,evaluate_on]
 
-		j+=1
+			#gt_mat,gt_mean,gt_std = pp.normalize(gt_mat,return_mean_std=True,leave_zero=True)
+			#pred_mat = pp.normalize_ref(pred_mat,gt_mean,gt_std)
+			diff = pred_mat-gt_mat 
+			fro = np.linalg.norm(diff)
+			rms = fro/np.sqrt(np.size(pred_mat))
+			rmses.append(rms)
+			
+			if args.test_names:
+				print("{0:s}, RMS norm of error: {1:.3f}".format(args.test_names[j],rms))
+			else:
+				print("RMS norm of error: {0:.3f}".format(rms))
+			
+			if args.plot:
+				for i,feature in enumerate(evaluate_on):
+					plt.figure()
+					plt.title(args.explanations[feature]+". {0:d}-step prediction.".format(int(args.pred_k)))
+					plt.plot(pred_mat[:,i],'b')
+					plt.plot(gt_mat[:,i],'r')
+					plt.plot(diff[:,i],'g')
+					plt.legend(["Predicted", "Ground Truth","Residual"])
+					plt.xlabel("Time")
+					plt.ylabel("Value")
+				plt.show()
+
+			j+=1
+
+	elif test_type == "CLASSIFICATION":
+		rmses = [1]
+		aux.classification_plot(pred,gt,args.settings["style"],args.settings["failure_horizon"])
 		
 	rmses = np.array(rmses)
 	print("Avg: {0:.3f}, Min: {1:.3f}, Max: {2:.3f}".format(np.mean(rmses),np.min(rmses),np.max(rmses)))
@@ -217,10 +249,9 @@ def evaluate(pred,gt,evaluate_on,args):
 def subgroup_score(train_data,test_data,sub_col,args,labels=[]):
 	pred_k = int(args.pred_k)
 	
-	pred = test(train_data,[test_dat[:-pred_k] for test_dat in test_data],sub_col.candidates + sub_col.remaining,args)
-
 	test_type = args.test_type.upper()
 	if test_type == "PREDICTION":
+		pred,__ = test(train_data,[test_dat[:-pred_k] for test_dat in test_data],sub_col.candidates + sub_col.remaining,args)
 		gt = [test_dat[pred_k:] for test_dat in test_data]
 		N = aux.num_features(test_data[0])
 		if args.subgroup_only_eval or not sub_col.remaining:
@@ -236,7 +267,8 @@ def subgroup_score(train_data,test_data,sub_col,args,labels=[]):
 
 		print(evaluate_on)
 	elif test_type == "CLASSIFICATION":
-		gt = labels
+		pred,gt = test(train_data,test_data,sub_col.candidates + sub_col.remaining,args)
+		evaluate_on = sub_col.candidates[0]
 	else:
 		print("Unknown test!")
 
@@ -256,7 +288,8 @@ def settings(args):
 				"VARMA_p": 2, "VARMA_q": 0, "ARMA_q": 2, # VARMA orders
 				"re_series": np.logspace(-1,-6,num_series), "rw_series": 500*np.logspace(0,-1,num_series), # VARMA training
 				"num_timepoints": 1000, "num_samples": 50, "case": "case2", # VARMA sim
-				"train_share": 0.2, "test_share": 0.2 # splitting
+				"train_share": 0.6, "test_share": 0.2, # splitting
+				"failure_horizon": 20, "pos_w": 20, "style": "SVR" # SVM 
 				}
 
 	args.settings = settings
@@ -266,12 +299,11 @@ def subgroup(data,args):
 	args.train_names = train_names
 	args.test_names = test_names
 	print(len(train_data))
-
-	'''
+	
 	N = aux.num_features(data[0])
 	sub_col = aux.Subgroup_collection(N,[])
 	#for i in range(1):
-	num = 10
+	num = 1
 	cands = candidate_generate(train_data,sub_col.get_remaining(),num,args)
 	#for cand in cands:
 	#	print(cand)
@@ -284,17 +316,16 @@ def subgroup(data,args):
 			legends.append(args.explanations[feature])
 		plt.legend(legends)
 		plt.show()
-		
 
 	for cand in cands:
 		print(cand)
-		for model in ["ARMA_PARALLEL","VARMA","TRIVIAL"]:
+		for model in [args.model]:
 			print(model)
 			mods = subgroup_learn(train_data,cand,model,args)
 			#for mod in mods:
 			#	print(mod.q)
 			sub_col.add(mods,"CANDIDATES")
-			subgroup_score(train_data,test_data,sub_col,args)
+			subgroup_score(train_data,train_data,sub_col,args)
 
 			sub_col.reset()
 			#if not subgroup_select(mods,sub_col,args):
@@ -304,11 +335,11 @@ def subgroup(data,args):
 			#sub_col.add(rem,"REMAINING")
 
 			#subgroup_score(train_data,test_data,sub_col,args)
-	'''
+	
 	
 def main(args):
 	settings(args)
-	data = preprocess(args)
+	data = fetch(args)
 
 	# subgroup learning
 	subgroup(data,args)

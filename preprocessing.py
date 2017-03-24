@@ -58,9 +58,12 @@ def differentiate(data):
 	return [np.diff(dat,axis=0) for dat in data]
 
 def smooth(data,length):
-	C = np.array([1]*length)
+	C = np.array([1]*length)/length
 	A = 1
 	return [ssignal.filtfilt(C,A,dat.T).T for dat in data]
+
+def filter(data,C,A):
+	return [ssignal.lfilter(C,A,dat.T).T for dat in data]	
 
 def normalize(dat,return_mean_max=False,leave_zero=False):
 	dat_mean = [np.mean(feat) for feat in dat.T]

@@ -104,14 +104,6 @@ def main(args):
 			i = 0
 			for x in range(5,np.shape(data[0])[1],2):
 				plotted = False
-				plt.figure()
-				plt.xlabel('Days before failure (red) or end of measurement (blue)')
-				try:
-					plt.title("S.M.A.R.T feature {0:d}: {1:s}".format(BB_SMART_order[i],smart_expl(i)))
-				except IndexError:
-					plt.title("Plot {0:d}".format(i))
-				except KeyError:
-					plt.title("S.M.A.R.T feature {0:d}".format(BB_SMART_order[i]))
 				
 				for dat,filename in zip(data,filenames):
 					#print(dat)
@@ -121,7 +113,16 @@ def main(args):
 						#print('empty feature at {0:d}'.format(x))
 						continue
 					else:
-						plotted = True
+						if not plotted:
+							plt.figure()
+							plt.xlabel('Days before failure (red) or end of measurement (blue)')
+							try:
+								plt.title("S.M.A.R.T feature {0:d}: {1:s}".format(BB_SMART_order[i],smart_expl(i)))
+							except IndexError:
+								plt.title("Plot {0:d}".format(i))
+							except KeyError:
+								plt.title("S.M.A.R.T feature {0:d}".format(BB_SMART_order[i]))
+							plotted = True
 					#y = input('Which feature do you want to look at? ')
 					#y = int(y)
 
@@ -138,7 +139,7 @@ def main(args):
 
 				if not plotted:
 					print("nothing to plot for {0:d}".format(i))
-					plt.close()
+					#plt.close()
 				i += 1
 			plt.show()
 
@@ -161,9 +162,20 @@ def main(args):
 			data = pp.remove_small_samples(data,min_sample_time)
 			print("after removing missing and small: "+ str(len(data)))
 
-			# Mathematical preprocessing			
-			data = pp.differentiate(data)
-			#data = pp.smooth(data,5)
+			# Mathematical preprocessing	
+			extended_features = False
+			if extended_features:		
+				exta = pp.differentiate(data)
+				#data = pp.smooth(data,5)
+				exta = pp.filter(exta,np.array([1]),np.array([1,-0.8]))
+				data = [dat[1:,:] for dat in data] # have to take a away first so that lengths are correct
+				#print(exta[0].shape)
+				#print(data[0].shape)
+				data = [np.concatenate([dat,ext],axis=1) for dat,ext in zip(data,exta)]
+			else:
+				data = pp.differentiate(data)
+				#data = pp.smooth(data,5)
+				data = pp.filter(data,np.array([1]),np.array([1,-0.8]))
 
 			data = pp.normalize_all(data,leave_zero=True)
 			print("Qualified indexes: " + str(sorted(idxs)))

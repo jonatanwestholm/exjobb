@@ -7,6 +7,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+import preprocessing as pp
 import models as Models
 
 ## General
@@ -252,29 +253,34 @@ def plot_train_varma(A_hist,C_hist,k,p,q):
 
 	plt.show()
 
-def impending_failure(data,names,dataset,failure_horizon):
+def impending_failure(data,names,dataset,failure_horizon,style):
 	if dataset == "TURBOFAN":
 		for dat in data:
-			X,y = impending_failure_datapoints(dat,True,failure_horizon)
+			X,y = impending_failure_datapoints(dat,True,failure_horizon,style)
 			yield X,y
 	elif dataset == "BACKBLAZE":
 		for dat,name in zip(data,names):
 			failure = "_fail" in name
-			X,y = impending_failure_datapoints(dat,failure,failure_horizon)
+			X,y = impending_failure_datapoints(dat,failure,failure_horizon,style)
 			yield X,y
 
-def impending_failure_datapoints(dat,failure,failure_horizon):
+def impending_failure_datapoints(dat,failure,failure_horizon,style):
 	N,M = dat.shape
 	if failure:
-		neg_X = dat[:-failure_horizon,:]
-		pos_X = dat[-failure_horizon:,:]
-		X = np.concatenate([neg_X,pos_X])
-		y = np.concatenate([-np.ones([N-failure_horizon,1]), np.ones([failure_horizon,1])])
-		#w = np.concatenate([np.ones([N-failure_horizon,1]), self.pos_w*np.ones([failure_horizon,1])])
+		X = dat
+		if style == "SVC":
+			y = np.concatenate([-np.ones([N-failure_horizon,1]), np.ones([failure_horizon,1])])
+		elif style == "SVR":
+			far_to_fail = failure_horizon*np.ones([N-failure_horizon,1])
+			close_to_fail = -np.array(range(-failure_horizon+1,1),ndmin=2).T
+			y = np.concatenate([far_to_fail,close_to_fail])
 	else:
 		X = dat[:-failure_horizon,:]
-		y = -np.ones([N-failure_horizon,1])
-		#w = np.ones([N-failure_horizon,1])
+		if style == "SVC":
+			y = -np.ones([N-failure_horizon,1])
+		elif style == "SVR":
+			y = failure_horizon*np.ones([N-failure_horizon,1])
+
 	return X,y
 
 '''
@@ -308,3 +314,28 @@ def predict_data(dat,models,k):
 		pred_mat[i,:] = pred_array
 		i += 1
 	return pred_mat
+
+# Visualization
+
+def classification_plot(pred,gt,style,failure_horizon):
+	for pred_arr,gt_arr in zip(pred,gt):
+		if style == "SVC":
+			pred_arr = (pred_arr+1)/2
+			gt_arr = (gt_arr+1)/2
+		elif style == "SVR":
+			pass
+
+		length = 10
+		pred_arr = pp.filter([pred_arr],np.array([1]*length)/length,np.array([1]))[0]
+		#print(pred_arr)
+
+		plt.figure()
+		plt.plot(pred_arr,'b')
+		plt.plot(gt_arr,'r')
+		if style == "SVC":
+			plt.axis([0,len(pred_arr), -0.1, 1.1])
+			plt.legend(["Predicted","Ground Truth"],loc=2)
+		elif style == "SVR":
+			plt.axis([length,len(pred_arr), 0, failure_horizon+1])
+			plt.legend(["Predicted","Ground Truth"],loc=3)
+	plt.show()

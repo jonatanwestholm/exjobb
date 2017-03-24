@@ -152,11 +152,12 @@ def main(args):
 			data = [dat[:,sorted(idxs)] for dat in data]
 			explanations = [explanations[i] for i in sorted(idxs)]
 
-			data,__ = pp.split(data,"TIMEWISE",train_share=0.6)
-			#data = pp.normalize_all(data)
+			#data,__ = pp.split(data,"TIMEWISE",train_share=0.6)
 
 			# Mathematical preprocessing
-			data = [pp.normalize(dat,leave_zero=True) for dat in data]
+			#data = [pp.normalize(dat,leave_zero=True) for dat in data]
+			#data = pp.filter(data,np.array([1]),np.array([1,-0.8]))
+			data = pp.normalize_all(data)
 
 			#print(changing)
 			print(explanations)
