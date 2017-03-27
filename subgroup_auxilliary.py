@@ -270,13 +270,20 @@ def impending_failure_datapoints(dat,failure,failure_horizon,style):
 		X = dat
 		if style == "SVC":
 			y = np.concatenate([-np.ones([N-failure_horizon,1]), np.ones([failure_horizon,1])])
+		elif style == "MLP":
+			multiplier = 1 #int(N/failure_horizon)
+
+			neg_X = dat[:-failure_horizon,:]
+			pos_X = dat[-failure_horizon:,:]
+			X = np.concatenate([neg_X]+multiplier*[pos_X])
+			y = np.concatenate([-np.ones([N-failure_horizon,1])] + multiplier*[np.ones([failure_horizon,1])])
 		elif style == "SVR":
 			far_to_fail = failure_horizon*np.ones([N-failure_horizon,1])
 			close_to_fail = -np.array(range(-failure_horizon+1,1),ndmin=2).T
 			y = np.concatenate([far_to_fail,close_to_fail])
 	else:
 		X = dat[:-failure_horizon,:]
-		if style == "SVC":
+		if style in ["SVC","MLP"]:
 			y = -np.ones([N-failure_horizon,1])
 		elif style == "SVR":
 			y = failure_horizon*np.ones([N-failure_horizon,1])
@@ -319,20 +326,20 @@ def predict_data(dat,models,k):
 
 def classification_plot(pred,gt,style,failure_horizon):
 	for pred_arr,gt_arr in zip(pred,gt):
-		if style == "SVC":
+		if style in ["SVC","MLP"]:
 			pred_arr = (pred_arr+1)/2
 			gt_arr = (gt_arr+1)/2
 		elif style == "SVR":
 			pass
 
-		length = 10
+		length = 5
 		pred_arr = pp.filter([pred_arr],np.array([1]*length)/length,np.array([1]))[0]
 		#print(pred_arr)
 
 		plt.figure()
 		plt.plot(pred_arr,'b')
 		plt.plot(gt_arr,'r')
-		if style == "SVC":
+		if style in ["SVC","MLP"]:
 			plt.axis([0,len(pred_arr), -0.1, 1.1])
 			plt.legend(["Predicted","Ground Truth"],loc=2)
 		elif style == "SVR":

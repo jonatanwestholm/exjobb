@@ -105,12 +105,21 @@ def count_numeric(arr):
 
 def numeric_idxs(data):	
 	first_row = data[0][0,:]
-	is_numeric = [i for i,elem in enumerate(first_row) if np.isfinite(elem)]
+	is_numeric = set([i for i,elem in enumerate(first_row) if np.isfinite(elem)])
+	for dat in data[1:]:
+		#print(is_numeric)
+		first_row = dat[0,:]
+		#print(first_row)
+		is_numeric = set.intersection(is_numeric,set([i for i,elem in enumerate(first_row) if np.isfinite(elem)]))
 	#only_num = [dat[:,is_numeric] for dat in data]
 	return is_numeric
 
 def changing_idxs(data):
 	dat0 = np.concatenate(data,axis=0)
+	#for row in dat0:
+	#	#print(len(np.where(np.isfinite(feat))[0]))
+	#	if len(np.where(np.isfinite(row))[0]) < 10:
+	#		print(row)
 	dat_std = [np.std(feat) for feat in dat0.T]
 	#print(dat_std)
 	changing = [i for i,item in enumerate(dat_std) if item > 10**-8]

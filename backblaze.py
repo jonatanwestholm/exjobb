@@ -16,6 +16,12 @@ normalized_idx = list(range(5,95,2))
 
 min_sample_time = 30
 
+def dead_rows(data,filenames):
+	for dat,filename in zip(data,filenames):
+		for i,row in enumerate(dat):
+			if len(np.where(np.isfinite(row))[0]) == 0:
+				print("Unit {0:s}, row {1:d}".format(filename,i))
+
 def just_the_names(filenames):
 	return [filename.split('/')[-1][:-4] for filename in filenames]
 
@@ -146,12 +152,14 @@ def main(args):
 		else:
 			# Data selection
 			data = [dat[:,normalized_idx] for dat in data]
+			dead_rows(data,filenames)
 
 			idxs = set(all_smart_except([194]))
-			#print(idxs)
+			print(idxs)
 			#print(set(pp.numeric_idxs(data)))
 			idxs = set.intersection(idxs,set(pp.numeric_idxs(data)))
-			#print(idxs)
+			print(idxs)
+			#print(pp.changing_idxs(data))
 			idxs = set.intersection(idxs,set(pp.changing_idxs(data)))
 			
 			data = [dat[:,sorted(idxs)] for dat in data]
@@ -163,7 +171,7 @@ def main(args):
 			print("after removing missing and small: "+ str(len(data)))
 
 			# Mathematical preprocessing	
-			extended_features = False
+			extended_features = True
 			if extended_features:		
 				exta = pp.differentiate(data)
 				#data = pp.smooth(data,5)

@@ -131,7 +131,7 @@ def train(data,subgroup,train_type,args):
 		mods = [aux.train_varma([dat[:,i] for dat in data],[subgroup[i]],p,q,re_series,rw_series) for i in range(N)]
 	elif train_type == "SVM":
 		mod = Models.SVM_TS(subgroup,args.settings["pos_w"],args.settings["style"])
-		for X,y in aux.impending_failure(data,args.train_names,args.dataset,args.settings["failure_horizon"],mod.style):
+		for X,y in aux.impending_failure(data,args.test_names,args.dataset,args.settings["failure_horizon"],mod.style):
 			mod.update(X,y)
 
 		mod.train()
@@ -288,8 +288,8 @@ def settings(args):
 				"VARMA_p": 2, "VARMA_q": 0, "ARMA_q": 2, # VARMA orders
 				"re_series": np.logspace(-1,-6,num_series), "rw_series": 500*np.logspace(0,-1,num_series), # VARMA training
 				"num_timepoints": 1000, "num_samples": 50, "case": "case2", # VARMA sim
-				"train_share": 0.6, "test_share": 0.2, # splitting
-				"failure_horizon": 20, "pos_w": 20, "style": "SVR" # SVM 
+				"train_share": 0.6, "test_share": 0.1, # splitting
+				"failure_horizon": 20, "pos_w": 10, "style": "MLP" # SVM 
 				}
 
 	args.settings = settings
@@ -300,6 +300,7 @@ def subgroup(data,args):
 	args.test_names = test_names
 	print(len(train_data))
 	
+	#print(data[0])
 	N = aux.num_features(data[0])
 	sub_col = aux.Subgroup_collection(N,[])
 	#for i in range(1):
@@ -325,7 +326,7 @@ def subgroup(data,args):
 			#for mod in mods:
 			#	print(mod.q)
 			sub_col.add(mods,"CANDIDATES")
-			subgroup_score(train_data,train_data,sub_col,args)
+			subgroup_score(train_data,test_data,sub_col,args)
 
 			sub_col.reset()
 			#if not subgroup_select(mods,sub_col,args):

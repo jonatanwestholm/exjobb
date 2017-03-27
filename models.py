@@ -5,6 +5,7 @@ import numpy as np
 import copy
 import time
 import sklearn.svm as svm
+from sklearn.neural_network import MLPClassifier
 
 def is_tensor(X,order=2):
 	#print(X)
@@ -290,6 +291,10 @@ class SVM_TS:
 			self.sv = svm.SVC()
 		elif self.style == "SVR":
 			self.sv = svm.SVR()
+		elif self.style == "MLP":
+			self.sv = MLPClassifier(solver='lbfgs', alpha=1e-5,
+                    				hidden_layer_sizes=(10,3), max_iter=1500, random_state=1)
+
 
 	def update(self,X,y):
 		if self.style == "SVC":
@@ -297,15 +302,26 @@ class SVM_TS:
 			w[y==1] = self.pos_w
 		elif self.style == "SVR":
 			w = 1/(y+1/self.pos_w)
+		else:
+			w = [[0]]
 
 		self.X = np.concatenate([self.X,X])
 		self.y = np.concatenate([self.y,y])
 		self.w = np.concatenate([self.w,w])
 
 	def train(self,return_score=False):
-		self.sv.fit(self.X,np.ravel(self.y),np.ravel(self.w))
+		if "SV" in self.style:
+			self.sv.fit(self.X,np.ravel(self.y),np.ravel(self.w))
+		else:
+			self.sv.fit(self.X,np.ravel(self.y))
 		if return_score:
 			return self.sv.score(self.X,np.ravel(self.y),np.ravel(self.w))
 
 	def predict(self,dat):
 		return self.sv.predict(dat)
+
+class Classifier:
+	pass
+
+class Regressor:
+	pass
