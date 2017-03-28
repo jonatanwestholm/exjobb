@@ -37,7 +37,7 @@ def fetch(args):
 	#	data = sim.arma_sim(np.array([1]),np.array([1,0.5,-0.2]),1000,num=5)
 	elif dataset == "VARMA_SIM":
 		if args.filename:
-			data = sim.read(args)
+			data = sim.read(args.filename,args.elemsep,args.linesep)
 			data = [pp.normalize(dat) for dat in data]
 		else:
 			num_timepoints = args.settings["num_timepoints"]
@@ -88,7 +88,7 @@ def candidate_generate(train_data,remaining,num,args):
 					break
 			cands.append(aux.map_idx(remaining,cand))
 	elif gen == "LINCORR":
-		lag = 5
+		lag = args.settings["lincorr_lag"]
 		dep = np.zeros([N,N])
 		for dat in train_data:
 			#aux.print_mat(dat)
@@ -129,6 +129,18 @@ def train(data,subgroup,train_type,args):
 		re_series = args.settings["re_series"]
 		rw_series = args.settings["rw_series"]
 		mods = [aux.train_varma([dat[:,i] for dat in data],[subgroup[i]],p,q,re_series,rw_series) for i in range(N)]
+	elif train_type == "ESN":
+		A_arch = args.settings["A_architecture"]
+		B_arch = args.settings["B_architecture"]
+		C_arch = args.settings["C_architecture"]
+		size_nodes = args.settings["ESN_size_state"]
+		size_out = args.settings["ESN_size_out"]
+		re_series = args.settings["re_series"]
+		rw_series = args.settings["rw_series"]
+		burn_in = args.settings["ESN_burn_in"]
+
+		mods = [aux.train_esn(data,subgroup,[N,size_nodes,size_out,N],[A_arch,B_arch,C_arch],re_series,rw_series,burn_in)]
+
 	elif train_type == "SVM":
 		mod = Models.SVM_TS(subgroup,args.settings["pos_w"],args.settings["style"])
 		for X,y in aux.impending_failure(data,args.test_names,args.dataset,args.settings["failure_horizon"],mod.style):
@@ -285,11 +297,15 @@ def settings(args):
 	num_series = 10
 
 	settings = {"min_subgroup_length": 3, "max_subgroup_length": 6, "subgroup_length": 3, # general
+				"lincorr_lag": 5, # candidate generation
 				"VARMA_p": 2, "VARMA_q": 0, "ARMA_q": 2, # VARMA orders
 				"re_series": np.logspace(-1,-6,num_series), "rw_series": 500*np.logspace(0,-1,num_series), # VARMA training
 				"num_timepoints": 1000, "num_samples": 50, "case": "case2", # VARMA sim
-				"train_share": 0.6, "test_share": 0.1, # splitting
-				"failure_horizon": 20, "pos_w": 10, "style": "MLP" # SVM 
+				"train_share": 0.4, "test_share": 0.2, # splitting
+				"failure_horizon": 10, "pos_w": 5, "style": "MLP", # SVM 
+				"A_architecture": "DLR", "B_architecture": "UNIFORM", "C_architecture": "SELECTED", # ESN
+				"ESN_size_state": 200, "ESN_size_out": 50, # ESN
+				"ESN_burn_in": 10 # ESN training
 				}
 
 	args.settings = settings

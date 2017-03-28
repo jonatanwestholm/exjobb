@@ -7,6 +7,8 @@ import time
 import sklearn.svm as svm
 from sklearn.neural_network import MLPClassifier
 
+import models_auxilliary as mod_aux
+
 def is_tensor(X,order=2):
 	#print(X)
 	#print(np.shape(X))
@@ -29,7 +31,7 @@ class MTS_Model:
 		for dat in data:
 			self.update(dat)
 
-	def learn(self,data,gt=[]):
+	def learn(self,Y,label=[]):
 		pass
 
 	def predict(self):
@@ -205,6 +207,115 @@ class VARMA(MTS_Model):
 			else:
 				learner.set_X(A_row)
 
+class ESN(MTS_Model):
+	def __init__(self,orders,architectures):
+		size_in,size_nodes,size_out,size_label = orders
+		self.M = size_in
+		self.N = size_nodes
+		self.O = size_out
+		self.L = size_label
+		
+		self.f = lambda x: 1/(1+np.exp(-x))
+		self.A = mod_aux.ESN_A(architectures[0],self.N)
+		self.B = mod_aux.ESN_B(architectures[1],self.M,self.N)
+		self.Cs = mod_aux.ESN_C(architectures[2],self.N,self.O)
+
+		self.reset()
+
+	def reset(self):
+		self.X = np.zeros([self.N,1])
+
+	def initiate_kalman(self,re,rw):
+		self.learners = [Kalman(self.O,re,rw) for i in range(self.L)]
+
+	def update_private(self,U,X,iterations=1):
+		for i in range(iterations):
+			X = self.f(np.dot(self.A,X) + np.dot(self.B,U))
+
+		return X
+
+	def update(self,Y):
+		if is_tensor(Y,int(self.M > 1)):
+			U = np.reshape(Y,[self.M,1])
+			self.X = self.update_private(U,self.X)
+		else:
+			for row in Y:
+				U = np.reshape(row,[self.M,1])
+				self.X = self.update_private(U,self.X)
+
+	def make_Cw(self):
+		Cw = np.zeros([self.L,self.O])
+		for i,learner in enumerate(self.learners):
+			Cw[i,:] = np.reshape(learner.X,[1,self.O])
+
+		self.Cw = Cw
+		return Cw
+
+	def learn_private(self,y,label=None):
+		Ys = np.dot(self.Cs,self.X)
+		Ys = np.reshape(Ys,[1,self.O])
+
+		if not label:
+			label = y
+
+		for learner,lab in zip(self.learners,label):
+			learner.update(lab,C=Ys)
+	
+		self.update(y)
+
+		return self.make_Cw()
+
+	def learn(self,Y,labels=[]):
+		C_hist = np.zeros([1,self.L,self.O])
+
+		if not labels:
+			for y in Y:
+				C_h = self.learn_private(y)
+				C_hist = np.concatenate([C_hist,[C_h]],axis=0)				
+		else:
+			for y,label in zip(Y,labels):
+				C_h = self.learn_private(y,label)
+				C_hist = np.concatenate([C_hist,[C_h]],axis=0)
+
+		C_hist = C_hist[1:]
+
+		return C_hist
+
+	def out(self,X=[]):
+		if X == []:
+			X = self.X
+		Ys = np.dot(self.Cs,X)
+
+		return np.dot(self.make_Cw(),Ys)
+
+	def predict(self,k):
+		U = np.zeros([self.M,1])
+		X = self.update_private(U,self.X,k-1)
+		return self.out(X)
+
+	def annealing(self,dat,re_series,rw_series,initiate=False):
+		C_hist = np.zeros([1,self.L,self.O])
+
+		step_length = int(len(dat)/len(re_series))
+		if initiate:
+			self.initiate_kalman(re_series[0],rw_series[0])
+		i = 0
+		for re,rw in zip(re_series,rw_series):
+			for learner in self.learners:
+				learner.set_variances(re,rw)
+			C_h = self.learn(dat[i*step_length:(i+1)*step_length])
+			#print(C_h.shape)
+			C_hist = np.concatenate([C_hist,C_h],axis=0)
+			i+=1
+
+		C_hist = C_hist[1:]
+
+		return C_hist
+
+	def set_Cw(self,Cw):
+		for i,learner in enumerate(self.learners):
+			learner.X = np.reshape(Cw[i,:],[self.O,1])
+
 # helps with learning
 # an object whose states is the weights of other models
 class Kalman:
@@ -258,8 +369,7 @@ class Kalman:
 		eye = np.eye(self.N)
 		Rxx1 = np.dot(eye-np.dot(K,C),self.Rxx)
 		self.Rxx = np.dot(self.A,np.dot(Rxx1,self.A.T)) + self.Re
-		self.Ryy = (np.dot(self.C,np.dot(Rxx1,self.C.T)) + self.Rw).astype(dtype='float64') 
-
+		self.Ryy = (np.dot(self.C,np.dot(Rxx1,self.C.T)) + self.Rw).astype(dtype='float64')
 		
 		if np.linalg.norm(self.X) > 10:
 			self.X = np.zeros([self.N,1])
@@ -293,7 +403,7 @@ class SVM_TS:
 			self.sv = svm.SVR()
 		elif self.style == "MLP":
 			self.sv = MLPClassifier(solver='lbfgs', alpha=1e-5,
-                    				hidden_layer_sizes=(10,3), max_iter=1500, random_state=1)
+                    				hidden_layer_sizes=(10,3), random_state=1)
 
 
 	def update(self,X,y):
@@ -320,8 +430,3 @@ class SVM_TS:
 	def predict(self,dat):
 		return self.sv.predict(dat)
 
-class Classifier:
-	pass
-
-class Regressor:
-	pass

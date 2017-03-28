@@ -149,10 +149,10 @@ def mixed_varma(T,case,settings={},return_A_C=False):
 	elif case == "random":
 		pass
 
-def read(args):
-	filenames = glob.glob(args.filename+"*.csv")
+def read(filename,elemsep,linesep):
+	filenames = glob.glob(filename+"*.csv")
 	print(filenames)
-	data = [np.array(pp.read_file(filename,args.elemsep,args.linesep,"all")) for filename in filenames] 
+	data = [np.array(pp.read_file(filename,elemsep,linesep,"all")) for filename in filenames] 
 	return data	
 
 def write(data,args):
