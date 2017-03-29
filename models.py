@@ -260,7 +260,8 @@ class ESN(MTS_Model):
 
 		for learner,lab in zip(self.learners,label):
 			learner.update(lab,C=Ys)
-	
+
+		#print("prediction: {0:.3f}, gt: {1:.3f}".format(self.predict(1)[0][0],y[0]))
 		self.update(y)
 
 		return self.make_Cw()
@@ -316,6 +317,25 @@ class ESN(MTS_Model):
 		for i,learner in enumerate(self.learners):
 			learner.X = np.reshape(Cw[i,:],[self.O,1])
 
+	def print_esn_line(self,idx):
+		line = ""
+		line += " ".join(["{0:.0f}".format(elem).rjust(3,' ') for elem in self.B[idx,:]])
+		line += "    |"
+		line += " v {0:.2f}".format(self.A[(idx+1)%self.N,idx]).ljust(9,' ')
+		line += "| {0:.2f}".format(self.A[(idx-1)%self.N,idx]).ljust(9,' ') + "^"
+		line += "|    "
+		out_node = np.where(self.Cs[:,idx] == 1)[0]
+		if len(out_node):
+			out_node = out_node[0]
+			line += " ".join(["{0:.3f}".format(elem).rjust(8,' ') for elem in self.Cw[:,out_node]])
+
+		return line
+
+	def print_esn(self):
+		Cw = self.make_Cw()
+		esn_print = "\n".join([self.print_esn_line(idx) for idx in range(self.N)])
+		print(esn_print)
+
 # helps with learning
 # an object whose states is the weights of other models
 class Kalman:
@@ -325,7 +345,8 @@ class Kalman:
 		if not C:
 			C = np.zeros([1,N])
 		if not X:
-			X = np.zeros([N,1])
+			#X = np.zeros([N,1])
+			X = np.random.normal(0,0.1,[N,1])
 		
 		self.N = N
 
@@ -381,6 +402,9 @@ class Kalman:
 			#print(self.Rw)
 			#time.sleep(0.5)
 
+		#degeneration step
+		#self.X = 0.985*self.X
+
 		return self.X
 
 	def set_X(self,X):
@@ -405,7 +429,6 @@ class SVM_TS:
 			self.sv = MLPClassifier(solver='lbfgs', alpha=1e-5,
                     				hidden_layer_sizes=(10,3), random_state=1)
 
-
 	def update(self,X,y):
 		if self.style == "SVC":
 			w = np.ones_like(y)
@@ -429,4 +452,3 @@ class SVM_TS:
 
 	def predict(self,dat):
 		return self.sv.predict(dat)
-

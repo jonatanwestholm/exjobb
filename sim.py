@@ -102,13 +102,17 @@ def varma_sim(C,A,T):
 	return y
 
 def mixed_varma(T,case,settings={},return_A_C=False):
-	if case == "case1": #VARMA(3,1,0)
+	if case == "case0": #AR(1)
+		A_1 = np.array([[0.500]])
+		C_1 = np.array([[1]])
+
+		y = varma_sim(C_1,A_1,T)
+
+	elif case == "case1": #VARMA(3,1,0)
 		A_1 = np.array([[0.5001,0.1,0.2],[0.1,0.5001,-0.2],[-0.1,0.2,0.5001]])
 		C_1 = np.array([[1,0,0],[0,1,0],[0,0,1]])
 	
-		y_1 = varma_sim(C_1,A_1,T)
-
-		return y_1
+		y = varma_sim(C_1,A_1,T)
 
 	elif case == "case2": #VARMA(3,1,0) + ARMA(1,0)
 		A_1 = np.array([[0.1,0.5001,0.2],[-0.2,0.1,0.5001],[0.5001,0.2,-0.1]])
@@ -120,7 +124,7 @@ def mixed_varma(T,case,settings={},return_A_C=False):
 		y_1 = varma_sim(C_1,A_1,T)
 		y_2 = varma_sim(C_2,A_2,T)
 
-		return np.concatenate([y_1,y_2],axis=1)
+		y = np.concatenate([y_1,y_2],axis=1)
 		
 	elif case == "case3":
 		A_1 = np.array([[0.1,0.5001,0.2,0,-0.3,0.7],[-0.2,0.1,0.5001,-0.7,0.3,-0.1],[0.5001,0.2,-0.1,0.4,0.6,-0.2]])
@@ -132,7 +136,7 @@ def mixed_varma(T,case,settings={},return_A_C=False):
 		y_1 = varma_sim(C_1,A_1,T)
 		y_2 = varma_sim(C_2,A_2,T)
 
-		return np.concatenate([y_1,y_2],axis=1)
+		y = np.concatenate([y_1,y_2],axis=1)
 
 	elif case == "case4":
 		A_1 = np.array([[0.1,0.5001,0.2,0,-0.3,0.7],[-0.2,0.1,0.5001,-0.7,0.3,-0.1],[0.5001,0.2,-0.1,0.4,0.6,-0.2]])
@@ -144,10 +148,12 @@ def mixed_varma(T,case,settings={},return_A_C=False):
 		y_1 = [varma_sim(C_1,A_1,T)]
 		y_2 = [varma_sim(C_2,A_2,T) for i in range(3)]
 
-		return np.concatenate(y_1+y_2,axis=1)
+		y = np.concatenate(y_1+y_2,axis=1)
 
 	elif case == "random":
 		pass
+
+	return y
 
 def read(filename,elemsep,linesep):
 	filenames = glob.glob(filename+"*.csv")
@@ -155,8 +161,8 @@ def read(filename,elemsep,linesep):
 	data = [np.array(pp.read_file(filename,elemsep,linesep,"all")) for filename in filenames] 
 	return data	
 
-def write(data,args):
-	dirname = "../data/sim/"+args.model+"/"
+def write(data,process_type,args):
+	dirname = "../data/sim/"+process_type+"/"
 	os.chdir(dirname)
 
 	instance_name = str(datetime.datetime.now().time())

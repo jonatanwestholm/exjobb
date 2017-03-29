@@ -211,7 +211,7 @@ def train_varma(data,subgroup,p,q,re_series,rw_series):
 	A_hist = A_hist[1:]
 	C_hist = C_hist[1:]
 
-	#plot_train_varma(A_hist,C_hist,N,p,q)
+	#plot_train(A_hist,C_hist,train_type="VARMA")
 	A = np.mean(A_hist,axis=0)
 	C = np.mean(C_hist,axis=0)
 	#print_mat(mod.A)
@@ -230,26 +230,32 @@ def train_varma(data,subgroup,p,q,re_series,rw_series):
 
 	return mod
 
-def plot_train_varma(A_hist,C_hist,k,p,q):
-	for j in range(k):
-		plt.figure()
-		plt.title("AR coefficients for y_{0:d}".format(j+1))
-		for i in range(k*p):
-			plt.plot(A_hist[:,j,i])
-		#for i in range(k*p):
-		#	plt.plot([0,N],[-A[j][i]]*2)
-		legends = flatten([["a({0:d},{1:d})".format(jx+1,ix+1) for jx in range(k)] for ix in range(p)]) # + flatten([["a({0:d},{1:d})_gt".format(jx+1,ix+1) for ix in range(p)] for jx in range(k)])
-		#print([["a({0:d},{1:d})_gt".format(jx+1,ix+1) for ix in range(p)] for jx in range(k)])
-		plt.legend(legends) #["a{0:d}".format(i+1) for i in range(k*p)]+["a{0:d}_gt".format(i+1) for i in range(p)])
-
-	if q:
+def plot_train(A_hist,C_hist,train_type):
+	if A_hist != []:
+		N,M = A_hist[0,:,:].shape
+		for j in range(N):
+			plt.figure()
+			plt.title("AR coefficients for y_{0:d}".format(j+1))
+			for i in range(M):
+				plt.plot(A_hist[:,j,i])
+			#for i in range(k*p):
+			#	plt.plot([0,N],[-A[j][i]]*2)
+			if train_type == "VARMA":
+				p = int(M/N)
+				legends = flatten([["a({0:d},{1:d})".format(jx+1,ix+1) for jx in range(N)] for ix in range(p)]) # + flatten([["a({0:d},{1:d})_gt".format(jx+1,ix+1) for ix in range(p)] for jx in range(k)])
+				#print([["a({0:d},{1:d})_gt".format(jx+1,ix+1) for ix in range(p)] for jx in range(k)])
+				plt.legend(legends) #["a{0:d}".format(i+1) for i in range(k*p)]+["a{0:d}_gt".format(i+1) for i in range(p)])
+	if C_hist != []:
+		N,M = C_hist[0,:,:].shape
 		plt.figure()
 		plt.title("MA coefficients")
-		for i in range(q):
+		for i in range(M):
 			plt.plot(C_hist[:,0,i])
 		#for i in range(q):
 		#	plt.plot([0,N],[C[0][i+1]]*2)
-		plt.legend(["c{0:d}".format(i+1) for i in range(q)]) #+["c{0:d}_gt".format(i+1) for i in range(q)])
+		if train_type == "VARMA":
+			q = int(M/N)
+			plt.legend(["c{0:d}".format(i+1) for i in range(q)]) #+["c{0:d}_gt".format(i+1) for i in range(q)])
 
 	plt.show()
 
@@ -271,13 +277,13 @@ def train_esn(data,subgroup,orders,architectures,re_series,rw_series,burn_in):
 		if i >= 0:
 			#print(C_hist.shape)
 			#print(C_h.shape)
-			C_hist = np.concatenate([C_hist,C_h[-5:]],axis=0)
+			C_hist = np.concatenate([C_hist,C_h[:-1]],axis=0)
 		i += 1
 	mod.reset()
 
 	C_hist = C_hist[1:]
 
-	#plot_train_varma(A_hist,C_hist,N,p,q)
+	plot_train([],C_hist,train_type="ESN")
 	C = np.mean(C_hist,axis=0)
 	#print_mat(mod.A)
 	#print_mat(mod.C)

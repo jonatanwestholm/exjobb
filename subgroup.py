@@ -44,7 +44,7 @@ def fetch(args):
 			num_samples = args.settings["num_samples"]
 			case = args.settings["case"]
 			data = [sim.mixed_varma(num_timepoints,case) for i in range(num_samples)]
-			sim.write(data,args)
+			sim.write(data,"VARMA",args)
 
 		N = aux.num_features(data[0])
 		explanations = ["feature {0:d}".format(i) for i in range(N)]
@@ -140,6 +140,8 @@ def train(data,subgroup,train_type,args):
 		burn_in = args.settings["ESN_burn_in"]
 
 		mods = [aux.train_esn(data,subgroup,[N,size_nodes,size_out,N],[A_arch,B_arch,C_arch],re_series,rw_series,burn_in)]
+
+		mods[0].print_esn()
 
 	elif train_type == "SVM":
 		mod = Models.SVM_TS(subgroup,args.settings["pos_w"],args.settings["style"])
@@ -299,12 +301,12 @@ def settings(args):
 	settings = {"min_subgroup_length": 3, "max_subgroup_length": 6, "subgroup_length": 3, # general
 				"lincorr_lag": 5, # candidate generation
 				"VARMA_p": 2, "VARMA_q": 0, "ARMA_q": 2, # VARMA orders
-				"re_series": np.logspace(-1,-6,num_series), "rw_series": 500*np.logspace(0,-1,num_series), # VARMA training
-				"num_timepoints": 1000, "num_samples": 50, "case": "case2", # VARMA sim
-				"train_share": 0.4, "test_share": 0.2, # splitting
+				"re_series": np.logspace(-1,-6,num_series), "rw_series": 50*np.logspace(0,-1,num_series), # VARMA training
+				"num_timepoints": 1000, "num_samples": 50, "case": "case4", # VARMA sim
+				"train_share": 0.1, "test_share": 0.2, # splitting
 				"failure_horizon": 10, "pos_w": 5, "style": "MLP", # SVM 
 				"A_architecture": "DLR", "B_architecture": "UNIFORM", "C_architecture": "SELECTED", # ESN
-				"ESN_size_state": 200, "ESN_size_out": 50, # ESN
+				"ESN_size_state": 50, "ESN_size_out": 10, # ESN
 				"ESN_burn_in": 10 # ESN training
 				}
 
@@ -339,6 +341,7 @@ def subgroup(data,args):
 		for model in [args.model]:
 			print(model)
 			mods = subgroup_learn(train_data,cand,model,args)
+			#print(mods[0].Cs)
 			#for mod in mods:
 			#	print(mod.q)
 			sub_col.add(mods,"CANDIDATES")

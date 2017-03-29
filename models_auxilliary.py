@@ -46,7 +46,7 @@ def ESN_B(architecture,M,N):
 		B = np.zeros([N,M])
 
 		for i in range(N):
-			B[i,:] = np.random.randint(0,2,[1,M])*2 - 1
+			B[i,:] = np.random.randint(0,2,[1,M]) #*2 - 1
 
 		B = B*v
 
