@@ -208,17 +208,21 @@ class VARMA(MTS_Model):
 				learner.set_X(A_row)
 
 class ESN(MTS_Model):
-	def __init__(self,orders,architectures):
+	def __init__(self,style,orders,architectures):
+		self.style = style
 		size_in,size_nodes,size_out,size_label = orders
 		self.M = size_in
 		self.N = size_nodes
-		self.O = size_out
+		self.Oh = size_out
 		self.L = size_label
 		
-		self.f = lambda x: 1/(1+np.exp(-x))
+		self.f = lambda x: np.tanh(x)
+		self.f_noise = lambda x: np.tanh(x) + np.random.normal(0,0.1,x.shape)#1/(1+np.exp(-x))
 		self.A = mod_aux.ESN_A(architectures[0],self.N)
 		self.B = mod_aux.ESN_B(architectures[1],self.M,self.N)
-		self.Cs = mod_aux.ESN_C(architectures[2],self.N,self.O)
+		self.Cs = mod_aux.ESN_C(architectures[2],self.N,self.Oh)
+
+		self.learners = None
 
 		self.reset()
 
@@ -226,11 +230,14 @@ class ESN(MTS_Model):
 		self.X = np.zeros([self.N,1])
 
 	def initiate_kalman(self,re,rw):
-		self.learners = [Kalman(self.O,re,rw) for i in range(self.L)]
+		self.learners = [Kalman(self.Oh,re,rw) for i in range(self.L)]
 
-	def update_private(self,U,X,iterations=1):
+	def update_private(self,U,X,iterations=1,noise=True):
 		for i in range(iterations):
-			X = self.f(np.dot(self.A,X) + np.dot(self.B,U))
+			if noise:
+				X = self.f_noise(np.dot(self.A,X) + np.dot(self.B,U))	
+			else:
+				X = self.f(np.dot(self.A,X) + np.dot(self.B,U))
 
 		return X
 
@@ -243,17 +250,25 @@ class ESN(MTS_Model):
 				U = np.reshape(row,[self.M,1])
 				self.X = self.update_private(U,self.X)
 
+		return self.X
+
 	def make_Cw(self):
-		Cw = np.zeros([self.L,self.O])
+		Cw = np.zeros([self.L,self.Oh])
 		for i,learner in enumerate(self.learners):
-			Cw[i,:] = np.reshape(learner.X,[1,self.O])
+			Cw[i,:] = np.reshape(learner.X,[1,self.Oh])
 
 		self.Cw = Cw
 		return Cw
 
+	def set_Cw(self,Cw):
+		self.Cw = Cw
+		if self.learners:
+			for i,learner in enumerate(self.learners):
+				learner.X = np.reshape(Cw[i,:],[self.Oh,1])
+
 	def learn_private(self,y,label=None):
 		Ys = np.dot(self.Cs,self.X)
-		Ys = np.reshape(Ys,[1,self.O])
+		Ys = np.reshape(Ys,[1,self.Oh])
 
 		if not label:
 			label = y
@@ -267,7 +282,7 @@ class ESN(MTS_Model):
 		return self.make_Cw()
 
 	def learn(self,Y,labels=[]):
-		C_hist = np.zeros([1,self.L,self.O])
+		C_hist = np.zeros([1,self.L,self.Oh])
 
 		if not labels:
 			for y in Y:
@@ -282,20 +297,50 @@ class ESN(MTS_Model):
 
 		return C_hist
 
+	def learn_batch(self,Y,labels=[],tikho=0):
+		T = Y.shape[0]
+
+		X_vec = np.zeros([T,self.Oh])
+
+		for i,y in enumerate(Y[:-1]):
+			X = self.update(y)
+			X_vec[i,:] = np.ravel(np.dot(self.Cs,X))
+
+		if not labels:
+			X_vec = X_vec[:-1,:]
+			Y_vec = Y[1:,:]
+		else:
+			Y_vec = labels
+
+		XX = np.dot(X_vec.T,X_vec)
+		#print(XX.shape)
+		XX += np.eye(self.Oh)*tikho**2
+		#print(XX)
+		XY = np.dot(X_vec.T,Y_vec)
+		#print(XY)
+		self.Cw = np.linalg.lstsq(XX,XY)[0]
+		return np.reshape(self.Cw,[1]+list(self.Cw.T.shape))
+
 	def out(self,X=[]):
 		if X == []:
 			X = self.X
 		Ys = np.dot(self.Cs,X)
 
-		return np.dot(self.make_Cw(),Ys)
+		return np.dot(self.Cw,Ys)
 
 	def predict(self,k):
-		U = np.zeros([self.M,1])
-		X = self.update_private(U,self.X,k-1)
+		if self.style == "CLASSIFICATION":
+			U = np.zeros([self.M,1])
+			X = self.update_private(U,self.X,k-1,noise=False)
+		elif self.style == "PREDICTION":
+			X = self.X
+			for i in range(k-1):
+				y = self.out(X)
+				X = self.update_private(y,X,noise=False)
 		return self.out(X)
 
 	def annealing(self,dat,re_series,rw_series,initiate=False):
-		C_hist = np.zeros([1,self.L,self.O])
+		C_hist = np.zeros([1,self.L,self.Oh])
 
 		step_length = int(len(dat)/len(re_series))
 		if initiate:
@@ -313,10 +358,6 @@ class ESN(MTS_Model):
 
 		return C_hist
 
-	def set_Cw(self,Cw):
-		for i,learner in enumerate(self.learners):
-			learner.X = np.reshape(Cw[i,:],[self.O,1])
-
 	def print_esn_line(self,idx):
 		line = ""
 		line += " ".join(["{0:.0f}".format(elem).rjust(3,' ') for elem in self.B[idx,:]])
@@ -332,7 +373,6 @@ class ESN(MTS_Model):
 		return line
 
 	def print_esn(self):
-		Cw = self.make_Cw()
 		esn_print = "\n".join([self.print_esn_line(idx) for idx in range(self.N)])
 		print(esn_print)
 

@@ -44,6 +44,7 @@ def fetch(args):
 			num_samples = args.settings["num_samples"]
 			case = args.settings["case"]
 			data = [sim.mixed_varma(num_timepoints,case) for i in range(num_samples)]
+			data = [pp.normalize(dat) for dat in data]
 			sim.write(data,"VARMA",args)
 
 		N = aux.num_features(data[0])
@@ -138,8 +139,11 @@ def train(data,subgroup,train_type,args):
 		re_series = args.settings["re_series"]
 		rw_series = args.settings["rw_series"]
 		burn_in = args.settings["ESN_burn_in"]
+		batch_train = args.settings["ESN_batch_train"]
+		tikho = args.settings["ESN_tikhonov_const"]
+		style = args.test_type
 
-		mods = [aux.train_esn(data,subgroup,[N,size_nodes,size_out,N],[A_arch,B_arch,C_arch],re_series,rw_series,burn_in)]
+		mods = [aux.train_esn(data,subgroup,style,[N,size_nodes,size_out,N],[A_arch,B_arch,C_arch],re_series,rw_series,burn_in,batch_train,tikho)]
 
 		mods[0].print_esn()
 
@@ -301,13 +305,13 @@ def settings(args):
 	settings = {"min_subgroup_length": 3, "max_subgroup_length": 6, "subgroup_length": 3, # general
 				"lincorr_lag": 5, # candidate generation
 				"VARMA_p": 2, "VARMA_q": 0, "ARMA_q": 2, # VARMA orders
-				"re_series": np.logspace(-1,-6,num_series), "rw_series": 50*np.logspace(0,-1,num_series), # VARMA training
-				"num_timepoints": 1000, "num_samples": 50, "case": "case4", # VARMA sim
-				"train_share": 0.1, "test_share": 0.2, # splitting
+				"re_series": np.logspace(-1,-6,num_series), "rw_series": 500*np.logspace(0,-1,num_series), # VARMA training
+				"num_timepoints": 1000, "num_samples": 50, "case": "case1", # VARMA sim
+				"train_share": 0.6, "test_share": 0.2, # splitting
 				"failure_horizon": 10, "pos_w": 5, "style": "MLP", # SVM 
-				"A_architecture": "DLR", "B_architecture": "UNIFORM", "C_architecture": "SELECTED", # ESN
-				"ESN_size_state": 50, "ESN_size_out": 10, # ESN
-				"ESN_burn_in": 10 # ESN training
+				"A_architecture": "DLR", "B_architecture": "SECTIONS", "C_architecture": "SELECTED", # ESN
+				"ESN_size_state": 10, "ESN_size_out": 10, # ESN
+				"ESN_burn_in": 10,"ESN_batch_train" : True,"ESN_tikhonov_const": 10 # ESN training
 				}
 
 	args.settings = settings

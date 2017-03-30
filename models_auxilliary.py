@@ -7,7 +7,7 @@ def ESN_A(architecture,N):
 	if architecture == "DLR": # Delay Line Reservoir
 		r = 0.5
 
-		arr = np.random.randint(0,2,[N-1,1])*2 - 1
+		arr = np.ones([N-1,1]) #np.random.randint(0,2,[N-1,1])*2 - 1
 		arr = r*np.ravel(arr)
 
 		A = np.diag(arr,-1)
@@ -16,8 +16,8 @@ def ESN_A(architecture,N):
 		r = 0.5
 		b = 0.05
 
-		arr_fwd = np.random.randint(0,2,[N-1,1])*2 - 1
-		arr_back = np.random.randint(0,2,[N-1,1])*2 - 1
+		arr_fwd = np.ones([N-1,1]) #np.random.randint(0,2,[N-1,1])*2 - 1
+		arr_back = np.ones([N-1,1]) #np.random.randint(0,2,[N-1,1])*2 - 1
 
 		arr_fwd = r*np.ravel(arr_fwd)
 		arr_back = b*np.ravel(arr_back)
@@ -40,34 +40,42 @@ def ESN_A(architecture,N):
 	return A
 
 def ESN_B(architecture,M,N):
+	v = 1
+	B = np.zeros([N,M])
+
 	if architecture == "UNIFORM":
-		v = 1
-
-		B = np.zeros([N,M])
-
 		for i in range(N):
-			B[i,:] = np.random.randint(0,2,[1,M]) #*2 - 1
-
-		B = B*v
-
+			B[i,:] = np.random.random([1,M]) < 0.5 #*2 - 1
+	elif architecture == "FULL":
+		for i in range(N):
+			B[i,:] = (np.random.random([1,M]) < 0.5)*2 - 1
 	elif architecture == "DIRECT":
-		v = 1
-
-		B = np.zeros([N,M])
-
 		B[:M,:] = np.eye(M)
+	elif architecture == "SELECTED":
+		arr = np.random.choice(M,N,replace=True)
 
-		B = B*v
+		for i,elem in enumerate(arr):
+			B[i,elem] = (np.random.random() < 0.5)*2-1
+	elif architecture == "SECTIONS":
+		p = int(N/M)+1
+
+		j = 0
+		for i in range(N):
+			B[i,j] = (np.random.random() < 0.5)*2-1
+			if i%p == p-1:
+				j += 1
+
+	B = v*B
 
 	return B
 
-def ESN_C(architecture,N,O):
+def ESN_C(architecture,N,Oh):
 	if architecture == "SELECTED":
 		v = 1
 
-		arr = np.random.choice(N,O,replace=False)
+		arr = np.random.choice(N,Oh,replace=False)
 
-		C = np.zeros([O,N])
+		C = np.zeros([Oh,N])
 
 		for i,elem in enumerate(arr):
 			C[i,elem] = 1

@@ -108,10 +108,12 @@ def mixed_varma(T,case,settings={},return_A_C=False):
 
 		y = varma_sim(C_1,A_1,T)
 
-	elif case == "case1": #VARMA(3,1,0)
-		A_1 = np.array([[0.5001,0.1,0.2],[0.1,0.5001,-0.2],[-0.1,0.2,0.5001]])
-		C_1 = np.array([[1,0,0],[0,1,0],[0,0,1]])
-	
+	elif case == "case1": #ARMA(3,0)
+		#A_1 = np.array([[0.5001,0.1,0.2],[0.1,0.5001,-0.2],[-0.1,0.2,0.5001]])
+		#C_1 = np.array([[1,0,0],[0,1,0],[0,0,1]])
+		A_1 = np.array([[0.500,-0.2,0.2]])
+		C_1 = np.array([[1]])
+
 		y = varma_sim(C_1,A_1,T)
 
 	elif case == "case2": #VARMA(3,1,0) + ARMA(1,0)

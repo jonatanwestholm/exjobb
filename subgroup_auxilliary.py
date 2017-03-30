@@ -247,10 +247,11 @@ def plot_train(A_hist,C_hist,train_type):
 				plt.legend(legends) #["a{0:d}".format(i+1) for i in range(k*p)]+["a{0:d}_gt".format(i+1) for i in range(p)])
 	if C_hist != []:
 		N,M = C_hist[0,:,:].shape
-		plt.figure()
-		plt.title("MA coefficients")
-		for i in range(M):
-			plt.plot(C_hist[:,0,i])
+		for j in range(N):
+			plt.figure()
+			plt.title("MA coefficients for y_{0:d}".format(j+1))
+			for i in range(M):
+				plt.plot(C_hist[:,j,i])
 		#for i in range(q):
 		#	plt.plot([0,N],[C[0][i+1]]*2)
 		if train_type == "VARMA":
@@ -259,31 +260,43 @@ def plot_train(A_hist,C_hist,train_type):
 
 	plt.show()
 
-def train_esn(data,subgroup,orders,architectures,re_series,rw_series,burn_in):
-	mod = Models.ESN(orders,architectures)
+def train_esn(data,subgroup,style,orders,architectures,re_series,rw_series,burn_in,batch_train,tikho):
+	mod = Models.ESN(style,orders,architectures)
 
 	size_in,size_nodes,size_out,size_label = orders
 	C_hist = np.zeros([1,size_label,size_out])
 
-	i = 0
-	for dat in data:
-		if is_tensor(dat,1):
-			dat = np.reshape(dat,[len(dat),1])
-
-		mod.reset()
-		for y in dat[:burn_in,:]:
-			mod.update(y)
-		C_h = mod.annealing(dat[burn_in:,:],re_series,rw_series,initiate= i == 0) #initiate = i==0
-		if i >= 0:
-			#print(C_hist.shape)
+	if batch_train:
+		for dat in data:
+			mod.reset()
+			for y in dat[:burn_in,:]:
+				mod.update(y)
+			C_h = mod.learn_batch(dat[burn_in:,:],tikho=tikho)
 			#print(C_h.shape)
-			C_hist = np.concatenate([C_hist,C_h[:-1]],axis=0)
-		i += 1
+			#print(C_hist.shape)
+			C_hist = np.concatenate([C_hist,C_h],axis=0)
+					
+	else:
+		i = 0
+		for dat in data:
+			if is_tensor(dat,1):
+				dat = np.reshape(dat,[len(dat),1])
+
+			mod.reset()
+			for y in dat[:burn_in,:]:
+				mod.update(y)
+			C_h = mod.annealing(dat[burn_in:,:],re_series,rw_series,initiate= i == 0) #initiate = i==0
+			if i >= 0:
+				#print(C_hist.shape)
+				#print(C_h.shape)
+				C_hist = np.concatenate([C_hist,C_h[:-1]],axis=0)
+			i += 1
+
 	mod.reset()
 
 	C_hist = C_hist[1:]
 
-	plot_train([],C_hist,train_type="ESN")
+	#plot_train([],C_hist,train_type="ESN")
 	C = np.mean(C_hist,axis=0)
 	#print_mat(mod.A)
 	#print_mat(mod.C)
