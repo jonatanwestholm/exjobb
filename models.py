@@ -6,6 +6,7 @@ import copy
 import time
 import sklearn.svm as svm
 from sklearn.neural_network import MLPClassifier
+import matplotlib.pyplot as plt
 
 import models_auxilliary as mod_aux
 
@@ -216,13 +217,14 @@ class ESN(MTS_Model):
 		self.Oh = size_out
 		self.L = size_label
 		
-		self.f = lambda x: np.tanh(x)
-		self.f_noise = lambda x: np.tanh(x) + np.random.normal(0,0.1,x.shape)#1/(1+np.exp(-x))
 		self.A = mod_aux.ESN_A(architectures[0],self.N)
 		self.B = mod_aux.ESN_B(architectures[1],self.M,self.N)
-		self.Cs = mod_aux.ESN_C(architectures[2],self.N,self.Oh)
+		#self.Cs = mod_aux.ESN_C(architectures[2],self.N,self.Oh)
+		self.f = mod_aux.ESN_f(architectures[3],self.N)
+		self.f_noise = lambda x: self.f(x) + np.random.normal(0,0.1,x.shape)#1/(1+np.exp(-x))
 
 		self.learners = None
+		self.first = 1
 
 		self.reset()
 
@@ -235,9 +237,9 @@ class ESN(MTS_Model):
 	def update_private(self,U,X,iterations=1,noise=True):
 		for i in range(iterations):
 			if noise:
-				X = self.f_noise(np.dot(self.A,X) + np.dot(self.B,U))	
+				X = self.f_noise(self.A*X + np.dot(self.B,U))	
 			else:
-				X = self.f(np.dot(self.A,X) + np.dot(self.B,U))
+				X = self.f(self.A*X + np.dot(self.B,U))
 
 		return X
 
@@ -300,17 +302,49 @@ class ESN(MTS_Model):
 	def learn_batch(self,Y,labels=[],tikho=0):
 		T = Y.shape[0]
 
-		X_vec = np.zeros([T,self.Oh])
+		X_vec = np.zeros([T,self.N])
 
 		for i,y in enumerate(Y[:-1]):
 			X = self.update(y)
-			X_vec[i,:] = np.ravel(np.dot(self.Cs,X))
+			X_vec[i,:] = np.ravel(X)
 
 		if not labels:
 			X_vec = X_vec[:-1,:]
 			Y_vec = Y[1:,:]
 		else:
 			Y_vec = labels
+
+		if self.first:
+			U,S,V = np.linalg.svd(X_vec)
+			self.Cs = V[:self.Oh,:]
+			print(self.Cs.shape)
+			#self.Cs = np.eye(self.Oh)
+			'''
+			S_energy = np.cumsum(S)
+			S_energy = S_energy/S_energy[-1]
+			plt.plot(S_energy)
+			plt.show()
+			'''
+			self.first = 0
+		else:
+			pass
+			'''
+			U,S,V = np.linalg.svd(X_vec)
+			U = U[:,:self.N]
+
+			U_auto1 = np.diag(np.dot(self.U.T,self.U))
+			U_auto2 = np.diag(np.dot(U.T,U))
+			U_cross = np.diag(np.dot(self.U.T,U))
+
+			U_rel = U_cross/np.sqrt(U_auto1*U_auto2)
+
+			plt.plot(U_rel)
+			plt.show()
+			'''
+
+		X_vec = np.dot(X_vec,self.Cs.T)
+
+		#print(X_vec)
 
 		XX = np.dot(X_vec.T,X_vec)
 		#print(XX.shape)
@@ -319,7 +353,7 @@ class ESN(MTS_Model):
 		XY = np.dot(X_vec.T,Y_vec)
 		#print(XY)
 		self.Cw = np.linalg.lstsq(XX,XY)[0]
-		return np.reshape(self.Cw,[1]+list(self.Cw.T.shape))
+		return np.reshape(self.Cw.T,[1]+list(self.Cw.T.shape))
 
 	def out(self,X=[]):
 		if X == []:
@@ -365,10 +399,10 @@ class ESN(MTS_Model):
 		line += " v {0:.2f}".format(self.A[(idx+1)%self.N,idx]).ljust(9,' ')
 		line += "| {0:.2f}".format(self.A[(idx-1)%self.N,idx]).ljust(9,' ') + "^"
 		line += "|    "
-		out_node = np.where(self.Cs[:,idx] == 1)[0]
-		if len(out_node):
-			out_node = out_node[0]
-			line += " ".join(["{0:.3f}".format(elem).rjust(8,' ') for elem in self.Cw[:,out_node]])
+		#out_node = np.where(self.Cs[:,idx] != 0)[0]
+		#if len(out_node):
+		#	out_node = out_node[0]
+		line += " ".join(["{0:.3f}".format(elem).rjust(8,' ') for elem in self.Cs[:,idx]])
 
 		return line
 

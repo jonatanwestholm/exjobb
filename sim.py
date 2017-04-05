@@ -128,7 +128,7 @@ def mixed_varma(T,case,settings={},return_A_C=False):
 
 		y = np.concatenate([y_1,y_2],axis=1)
 		
-	elif case == "case3":
+	elif case == "case3": # VAR(3,2,)
 		A_1 = np.array([[0.1,0.5001,0.2,0,-0.3,0.7],[-0.2,0.1,0.5001,-0.7,0.3,-0.1],[0.5001,0.2,-0.1,0.4,0.6,-0.2]])
 		C_1 = np.array([[1,0,0],[0,1,0],[0,0,1]])
 

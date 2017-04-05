@@ -161,6 +161,7 @@ def main(args):
 			print(idxs)
 			#print(pp.changing_idxs(data))
 			idxs = set.intersection(idxs,set(pp.changing_idxs(data)))
+			print(idxs)
 			
 			data = [dat[:,sorted(idxs)] for dat in data]
 			explanations = [smart_expl(i) for i in sorted(idxs)]
@@ -180,6 +181,9 @@ def main(args):
 				#print(exta[0].shape)
 				#print(data[0].shape)
 				data = [np.concatenate([dat,ext],axis=1) for dat,ext in zip(data,exta)]
+
+				expl_ext = [expl + " (modified)" for expl in explanations]
+				explanations = explanations + expl_ext
 			else:
 				data = pp.differentiate(data)
 				#data = pp.smooth(data,5)

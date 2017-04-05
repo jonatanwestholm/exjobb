@@ -73,7 +73,8 @@ def candidate_generate(train_data,remaining,num,args):
 		cands = [aux.map_idx(remaining,cand)]*num # subgroups won't be edited, only read
 	elif gen == "CUSTOM":
 		#cands = [[8,13,15,18,19,21]] # turbofan 2
-		cand = [2,6,9,10,11]
+		#cand = [2,6,9,10,11]
+		cand = [0,1,2]
 		ext = [] #[elem+12 for elem in cand]
 		cands = [cand + ext]
 	elif gen == "RANDOM":
@@ -134,6 +135,7 @@ def train(data,subgroup,train_type,args):
 		A_arch = args.settings["A_architecture"]
 		B_arch = args.settings["B_architecture"]
 		C_arch = args.settings["C_architecture"]
+		f_arch = args.settings["f_architecture"]
 		size_nodes = args.settings["ESN_size_state"]
 		size_out = args.settings["ESN_size_out"]
 		re_series = args.settings["re_series"]
@@ -143,9 +145,9 @@ def train(data,subgroup,train_type,args):
 		tikho = args.settings["ESN_tikhonov_const"]
 		style = args.test_type
 
-		mods = [aux.train_esn(data,subgroup,style,[N,size_nodes,size_out,N],[A_arch,B_arch,C_arch],re_series,rw_series,burn_in,batch_train,tikho)]
+		mods = [aux.train_esn(data,subgroup,style,[N,size_nodes,size_out,N],[A_arch,B_arch,C_arch,f_arch],re_series,rw_series,burn_in,batch_train,tikho)]
 
-		mods[0].print_esn()
+		#mods[0].print_esn()
 
 	elif train_type == "SVM":
 		mod = Models.SVM_TS(subgroup,args.settings["pos_w"],args.settings["style"])
@@ -309,9 +311,9 @@ def settings(args):
 				"num_timepoints": 1000, "num_samples": 50, "case": "case1", # VARMA sim
 				"train_share": 0.6, "test_share": 0.2, # splitting
 				"failure_horizon": 10, "pos_w": 5, "style": "MLP", # SVM 
-				"A_architecture": "DLR", "B_architecture": "SECTIONS", "C_architecture": "SELECTED", # ESN
-				"ESN_size_state": 10, "ESN_size_out": 10, # ESN
-				"ESN_burn_in": 10,"ESN_batch_train" : True,"ESN_tikhonov_const": 10 # ESN training
+				"A_architecture": "SCR", "B_architecture": "SECTIONS", "C_architecture": "SELECTED", "f_architecture": "TANH", # ESN
+				"ESN_size_state": 500, "ESN_size_out": 30, # ESN
+				"ESN_burn_in": 10,"ESN_batch_train" : True,"ESN_tikhonov_const": 3  # ESN training
 				}
 
 	args.settings = settings
@@ -323,6 +325,8 @@ def subgroup(data,args):
 	print(len(train_data))
 	
 	#print(data[0])
+	#print(data[0].shape)
+
 	N = aux.num_features(data[0])
 	sub_col = aux.Subgroup_collection(N,[])
 	#for i in range(1):
