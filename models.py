@@ -209,24 +209,36 @@ class VARMA(MTS_Model):
 				learner.set_X(A_row)
 
 class ESN(MTS_Model):
-	def __init__(self,style,orders,architectures):
+	esn_component_sizes = {"AR":1,"RODAN":1,"DIRECT":1,"THRES":2,"TRIGGER":3}
+
+	def __init__(self,style,orders,spec):
 		self.style = style
-		size_in,size_nodes,size_out,size_label = orders
+		size_in,size_out,size_label = orders
 		self.M = size_in
-		self.N = size_nodes
+		self.N = self.total_size(spec)
 		self.Oh = size_out
 		self.L = size_label
 		
-		self.A = mod_aux.ESN_A(architectures[0],self.N)
-		self.B = mod_aux.ESN_B(architectures[1],self.M,self.N)
+		#self.A = mod_aux.ESN_A(architectures[0],self.N)
+		#self.B = mod_aux.ESN_B(architectures[1],self.M,self.N)
 		#self.Cs = mod_aux.ESN_C(architectures[2],self.N,self.Oh)
-		self.f = mod_aux.ESN_f(architectures[3],self.N)
-		self.f_noise = lambda x: self.f(x) + np.random.normal(0,0.1,x.shape)#1/(1+np.exp(-x))
+		#self.f = [mod_aux.ESN_f(architectures[3]) for i in range(self.N)]
+		#self.f_noise = lambda x: self.f(x) + np.random.normal(0,0.1,x.shape)#1/(1+np.exp(-x))
+		self.A,self.B,self.f = mod_aux.compound_ESN(spec,self.M)
+		self.A_array = self.A.toarray()
+		#self.B_array = self.B.toarray()
 
 		self.learners = None
 		self.first = 1
 
 		self.reset()
+
+	def total_size(self,spec):
+		total = 0
+		for key in spec:
+			total += self.esn_component_sizes[key]*spec[key]
+
+		return total
 
 	def reset(self):
 		self.X = np.zeros([self.N,1])
@@ -234,12 +246,19 @@ class ESN(MTS_Model):
 	def initiate_kalman(self,re,rw):
 		self.learners = [Kalman(self.Oh,re,rw) for i in range(self.L)]
 
+	def activate(self,X):
+		Y = np.zeros_like(X)
+		for i in range(len(X)):
+			Y[i] = self.f[i](X[i])
+
+		return Y
+
 	def update_private(self,U,X,iterations=1,noise=True):
 		for i in range(iterations):
 			if noise:
-				X = self.f_noise(self.A*X + np.dot(self.B,U))	
+				X = self.activate(self.A*X + np.dot(self.B,U))	
 			else:
-				X = self.f(self.A*X + np.dot(self.B,U))
+				X = self.activate(self.A*X + np.dot(self.B,U))
 
 		return X
 
@@ -396,8 +415,8 @@ class ESN(MTS_Model):
 		line = ""
 		line += " ".join(["{0:.0f}".format(elem).rjust(3,' ') for elem in self.B[idx,:]])
 		line += "    |"
-		line += " v {0:.2f}".format(self.A[(idx+1)%self.N,idx]).ljust(9,' ')
-		line += "| {0:.2f}".format(self.A[(idx-1)%self.N,idx]).ljust(9,' ') + "^"
+		line += " v {0:.2f}".format(self.A_array[(idx+1)%self.N,idx]).ljust(9,' ')
+		line += "| {0:.2f}".format(self.A_array[(idx-1)%self.N,idx]).ljust(9,' ') + "^"
 		line += "|    "
 		#out_node = np.where(self.Cs[:,idx] != 0)[0]
 		#if len(out_node):

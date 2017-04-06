@@ -49,6 +49,20 @@ def fetch(args):
 
 		N = aux.num_features(data[0])
 		explanations = ["feature {0:d}".format(i) for i in range(N)]
+	elif dataset == "ESN_SIM":
+		if args.filename:
+			data = sim.read(args.filename,args.elemsep,args.linesep)
+			data = [pp.normalize(dat) for dat in data]
+		else:
+			num_timepoints = args.settings["num_timepoints"]
+			case = args.settings["ESN_sim_case"]
+			data = [sim.esn_sim(num_timepoints,case) for i in range(10)]
+			data = [pp.normalize(dat) for dat in data]
+			sim.write(data,"ESN",args)
+
+		N = aux.num_features(data[0])
+		explanations = ["feature {0:d}".format(i) for i in range(N)]
+			
 	else:
 		print("No matching dataset!")
 
@@ -132,11 +146,12 @@ def train(data,subgroup,train_type,args):
 		rw_series = args.settings["rw_series"]
 		mods = [aux.train_varma([dat[:,i] for dat in data],[subgroup[i]],p,q,re_series,rw_series) for i in range(N)]
 	elif train_type == "ESN":
-		A_arch = args.settings["A_architecture"]
-		B_arch = args.settings["B_architecture"]
-		C_arch = args.settings["C_architecture"]
-		f_arch = args.settings["f_architecture"]
-		size_nodes = args.settings["ESN_size_state"]
+		#A_arch = args.settings["A_architecture"]
+		#B_arch = args.settings["B_architecture"]
+		#C_arch = args.settings["C_architecture"]
+		#f_arch = args.settings["f_architecture"]
+		#size_nodes = args.settings["ESN_size_state"]
+		spec = args.settings["ESN_spec"]
 		size_out = args.settings["ESN_size_out"]
 		re_series = args.settings["re_series"]
 		rw_series = args.settings["rw_series"]
@@ -145,9 +160,9 @@ def train(data,subgroup,train_type,args):
 		tikho = args.settings["ESN_tikhonov_const"]
 		style = args.test_type
 
-		mods = [aux.train_esn(data,subgroup,style,[N,size_nodes,size_out,N],[A_arch,B_arch,C_arch,f_arch],re_series,rw_series,burn_in,batch_train,tikho)]
+		mods = [aux.train_esn(data,subgroup,style,[N,size_out,N],spec,re_series,rw_series,burn_in,batch_train,tikho)]
 
-		#mods[0].print_esn()
+		mods[0].print_esn()
 
 	elif train_type == "SVM":
 		mod = Models.SVM_TS(subgroup,args.settings["pos_w"],args.settings["style"])
@@ -191,16 +206,16 @@ def test(train_data,test_data,models,args):
 	if test_type == "PREDICTION":
 		# take prediction unit by unit - units are assumed to be independent
 		
-		# reset all inner states first
-		aux.reset_models(models)
 		if split_method == "TIMEWISE":	
 			for tr_dat,test_dat in zip(train_data,test_data):
 				# set states of models
+				aux.reset_models(models)
 				aux.update_models(tr_dat,models)
 
 				pred.append(aux.predict_data(test_dat,models,k))
 		elif split_method == "UNITWISE":
 			for test_dat in test_data:
+				aux.reset_models(models)
 				pred.append(aux.predict_data(test_dat,models,k))
 
 	elif test_type == "CLASSIFICATION":
@@ -309,11 +324,14 @@ def settings(args):
 				"VARMA_p": 2, "VARMA_q": 0, "ARMA_q": 2, # VARMA orders
 				"re_series": np.logspace(-1,-6,num_series), "rw_series": 500*np.logspace(0,-1,num_series), # VARMA training
 				"num_timepoints": 1000, "num_samples": 50, "case": "case1", # VARMA sim
-				"train_share": 0.6, "test_share": 0.2, # splitting
+				"train_share": 0.1, "test_share": 0.1, # splitting
 				"failure_horizon": 10, "pos_w": 5, "style": "MLP", # SVM 
-				"A_architecture": "SCR", "B_architecture": "SECTIONS", "C_architecture": "SELECTED", "f_architecture": "TANH", # ESN
-				"ESN_size_state": 500, "ESN_size_out": 30, # ESN
-				"ESN_burn_in": 10,"ESN_batch_train" : True,"ESN_tikhonov_const": 3  # ESN training
+				#"A_architecture": "DLR", "B_architecture": "SECTIONS", "C_architecture": "SELECTED", "f_architecture": "TANH", # ESN
+				#"ESN_size_state": 500, 
+				"ESN_spec": {"RODAN": 30,"AR":20},
+				"ESN_size_out": 10, # ESN
+				"ESN_burn_in": 10,"ESN_batch_train" : True,"ESN_tikhonov_const": 3,  # ESN training
+				"ESN_sim_case": "thres_sum_waves"
 				}
 
 	args.settings = settings

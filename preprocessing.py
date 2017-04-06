@@ -12,10 +12,13 @@ import scipy.signal as ssignal
 
 ## I/O
 
-def read_file(name,elemsep,linesep,readlines):
+def read_file(name,elemsep,linesep,readlines,mapping=None):
 	f = open(name,'r').read()
 
-	data = [read_line(line,elemsep,greedy_numeric) for line in f.split(linesep)]
+	if mapping == None:
+		data = [read_line(line,elemsep,greedy_numeric) for line in f.split(linesep)]
+	else:
+		data = [read_line(line,elemsep,mapping) for line in f.split(linesep)]
 
 	if readlines == "all":
 		return data

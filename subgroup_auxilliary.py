@@ -260,10 +260,10 @@ def plot_train(A_hist,C_hist,train_type):
 
 	plt.show()
 
-def train_esn(data,subgroup,style,orders,architectures,re_series,rw_series,burn_in,batch_train,tikho):
-	mod = Models.ESN(style,orders,architectures)
+def train_esn(data,subgroup,style,orders,spec,re_series,rw_series,burn_in,batch_train,tikho):
+	mod = Models.ESN(style,orders,spec)
 
-	size_in,size_nodes,size_out,size_label = orders
+	__,size_out,size_label = orders
 	C_hist = np.zeros([1,size_label,size_out])
 
 	if batch_train:

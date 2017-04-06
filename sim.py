@@ -53,6 +53,22 @@ def one_hot(n,k):
 		v[k] = 1
 		return v
 
+def square_signal(num,period):
+	half_period = int(period/2)
+	signal = np.zeros([num,1])
+	for i in range(num):
+		if i%period >= half_period:
+			signal[i] = 1
+
+	return signal
+
+def sin_signal(num,period):
+	signal = np.linspace(0,num,num+1)[:-1]
+	signal = signal*2*np.pi/period
+	signal = np.sin(signal)
+	signal = signal.reshape([num,1])
+	return signal
+
 def varma_sim(C,A,T):
 	# determine orders
 	k = np.shape(C)[0]
@@ -157,10 +173,21 @@ def mixed_varma(T,case,settings={},return_A_C=False):
 
 	return y
 
+def esn_sim(T,case):
+	if case == "thres_sum_waves":
+		switch = square_signal(T,100)
+		wave1 = sin_signal(T,50)
+		wave2 = sin_signal(T,20)
+		composite = wave1*(switch == 0) + wave2*(switch == 1)
+
+		y = np.concatenate([switch,wave1,wave2,composite],axis=1)
+
+	return y
+
 def read(filename,elemsep,linesep):
 	filenames = glob.glob(filename+"*.csv")
 	print(filenames)
-	data = [np.array(pp.read_file(filename,elemsep,linesep,"all")) for filename in filenames] 
+	data = [np.array(pp.read_file(filename,elemsep,linesep,"all")) for filename in filenames]
 	return data	
 
 def write(data,process_type,args):
