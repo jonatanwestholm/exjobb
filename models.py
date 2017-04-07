@@ -209,13 +209,11 @@ class VARMA(MTS_Model):
 				learner.set_X(A_row)
 
 class ESN(MTS_Model):
-	esn_component_sizes = {"AR":1,"RODAN":1,"DIRECT":1,"THRES":2,"TRIGGER":3}
 
 	def __init__(self,style,orders,spec):
 		self.style = style
 		size_in,size_out,size_label = orders
 		self.M = size_in
-		self.N = self.total_size(spec)
 		self.Oh = size_out
 		self.L = size_label
 		
@@ -224,8 +222,21 @@ class ESN(MTS_Model):
 		#self.Cs = mod_aux.ESN_C(architectures[2],self.N,self.Oh)
 		#self.f = [mod_aux.ESN_f(architectures[3]) for i in range(self.N)]
 		#self.f_noise = lambda x: self.f(x) + np.random.normal(0,0.1,x.shape)#1/(1+np.exp(-x))
-		self.A,self.B,self.f = mod_aux.compound_ESN(spec,self.M)
+		self.components = mod_aux.compound_ESN(spec,self.M)
+		self.A,self.B,self.f,self.idx_groups = mod_aux.generate_matrices(self.components)
+
+		'''
+		self.B = np.array([[-1,0,0,0],
+						   [0,1,0,0],
+						   [1,0,0,0],
+						   [0,0,1,0]])
+		'''
+
 		self.A_array = self.A.toarray()
+		#print(self.A_array)
+
+		self.N = self.total_size()
+		
 		#self.B_array = self.B.toarray()
 
 		self.learners = None
@@ -233,10 +244,10 @@ class ESN(MTS_Model):
 
 		self.reset()
 
-	def total_size(self,spec):
+	def total_size(self):
 		total = 0
-		for key in spec:
-			total += self.esn_component_sizes[key]*spec[key]
+		for comp in self.components:
+			total += comp.N
 
 		return total
 
@@ -248,17 +259,32 @@ class ESN(MTS_Model):
 
 	def activate(self,X):
 		Y = np.zeros_like(X)
-		for i in range(len(X)):
-			Y[i] = self.f[i](X[i])
+		for f_comp,idx_group in zip(self.f,self.idx_groups):
+			start = idx_group[0]
+			end = idx_group[1]
+			Y[start:end] = f_comp(X[start:end])
 
+		#print(X)
+		#print(Y)
 		return Y
 
 	def update_private(self,U,X,iterations=1,noise=True):
 		for i in range(iterations):
+			'''
+			print(self.B)
+			print(self.B.shape)
+			print(U.shape)
+			print(self.A_array)
+			print(self.A.shape)
+			print(X.shape)
+			'''
+			X = self.activate(self.A*X + np.dot(self.B,U))
+			'''
 			if noise:
 				X = self.activate(self.A*X + np.dot(self.B,U))	
 			else:
 				X = self.activate(self.A*X + np.dot(self.B,U))
+			'''
 
 		return X
 
@@ -336,7 +362,7 @@ class ESN(MTS_Model):
 		if self.first:
 			U,S,V = np.linalg.svd(X_vec)
 			self.Cs = V[:self.Oh,:]
-			print(self.Cs.shape)
+			#print(self.Cs.shape)
 			#self.Cs = np.eye(self.Oh)
 			'''
 			S_energy = np.cumsum(S)

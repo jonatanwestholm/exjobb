@@ -372,14 +372,22 @@ def update_models(data,models):
 def predict_data(dat,models,k):
 	pred_mat = np.zeros_like(dat)
 	i = 0
+	#X_data = np.zeros([models[0].N,dat.shape[0]])
 	for sample in dat:
 		pred_array = np.zeros_like(sample)
+
 		for mod in models:
 			mod.update(sample[mod.subgroup])
 			pred_array[mod.subgroup] = mod.predict(k)
 
+		#X_data[:,i] = np.ravel(models[0].X)
+
 		pred_mat[i,:] = pred_array
 		i += 1
+
+	#plt.plot(X_data.T)
+	#plt.show()
+
 	return pred_mat
 
 # Visualization

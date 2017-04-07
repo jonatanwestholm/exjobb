@@ -176,9 +176,15 @@ def mixed_varma(T,case,settings={},return_A_C=False):
 def esn_sim(T,case):
 	if case == "thres_sum_waves":
 		switch = square_signal(T,100)
-		wave1 = sin_signal(T,50)
-		wave2 = sin_signal(T,20)
-		composite = wave1*(switch == 0) + wave2*(switch == 1)
+		switch = switch*2 - 1
+		wave1 = sin_signal(T,50)+5
+		wave2 = sin_signal(T,20)+5
+		composite = wave1*(switch == -1) + wave2*(switch == 1)
+
+		switch = switch[1:]
+		wave1 = wave1[1:]
+		wave2 = wave2[1:]
+		composite = composite[:-1]
 
 		y = np.concatenate([switch,wave1,wave2,composite],axis=1)
 

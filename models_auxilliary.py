@@ -4,13 +4,20 @@
 import numpy as np
 from scipy import sparse
 
+esn_component_sizes = {"VAR":1,"RODAN":1,"DIRECT":1,"THRES":2,"TRIGGER":3}
+
+THRES_HIGH = 1000
+
 def ESN_A(architecture,N,r=0.5,b=0.05):
 
 	if architecture == "DLR": # Delay Line Reservoir
-		arr = np.ones([N-1,1]) #np.random.randint(0,2,[N-1,1])*2 - 1
-		arr = r*np.ravel(arr)
+		if N > 1:
+			arr = np.ones([N-1,1]) #np.random.randint(0,2,[N-1,1])*2 - 1
+			arr = r*np.ravel(arr)
 
-		A = sparse.diags(arr,-1)
+			A = sparse.diags(arr,-1)
+		else:
+			A = sparse.diags(0,0)
 
 	elif architecture == "DLRB": # Delay Line Reservoir with Backward Connections
 		arr_fwd = np.ones([N-1,1]) #np.random.randint(0,2,[N-1,1])*2 - 1
@@ -27,8 +34,12 @@ def ESN_A(architecture,N,r=0.5,b=0.05):
 		arr = r*np.ravel(arr[:-1])
 
 		A = sparse.diags([arr,[r]],[-1,N-1])
-		
+	'''
+	elif architecture == "DIRECT":
+		arr = np.ones([N,])
 
+		A = sparse.diags(arr,0)		
+	'''
 	'''
 	elif architecture == "RANDOM":
 		num_each = 3
@@ -44,7 +55,7 @@ def ESN_A(architecture,N,r=0.5,b=0.05):
 
 	return A
 
-def ESN_B(architecture,M,N,v=1,replace=True):
+def ESN_B(architecture,M,N,v=1,replace=True,external_input=0):
 	B = np.zeros([N,M])
 
 	if architecture == "UNIFORM":
@@ -80,6 +91,8 @@ def ESN_B(architecture,M,N,v=1,replace=True):
 			if i%p == p-1:
 				j += 1
 				first = 1
+	elif architecture == "SINGLE":
+		B[0,external_input] = 1
 
 	B = v*B
 
@@ -102,30 +115,26 @@ def ESN_C(architecture,N,Oh):
 	return C
 '''
 
-def ESN_f(architecture):
+def ESN_f(architecture,thres=0):
 	if architecture == "LIN":
 		f = lambda x: x
 	elif architecture == "TANH":
 		f = lambda x: np.tanh(x)
+	elif architecture == "POSLIN":
+		f = lambda x: (x>thres)*(x-thres)
+	elif architecture == "THRES":
+		f = lambda x: x>thres
 
 	return f
 
-def poslin(thres,bottom,start):
-	return lambda x: (x>thres)*(x+start-bottom) + bottom
-
-def thres(thres):
-	return lambda x: x>thres
-
-THRES_HIGH = 1000
-def make_thres(M,direct_input=True,random_thres=False,turn_on=True):
-	
+def make_thres(M, direct_input, random_thres, turn_on):
 	if direct_input:
 		B = ESN_B("SELECTED",M,2,replace=False)
 	else:
 		B = ESN_B("SELECTED",M,2)
 		B[0,:] = 0
 
-	A = sparse.diags([THRES_HIGH],[1])
+	A = sparse.diags([THRES_HIGH],[-1])
 
 	if random_thres:
 		THRES = np.random.normal(0,1)
@@ -133,14 +142,14 @@ def make_thres(M,direct_input=True,random_thres=False,turn_on=True):
 		THRES = 0
 
 	if turn_on:
-		f = [thres(THRES),poslin(THRES_HIGH,0,0)]
+		f = [ESN_f("THRES",THRES),ESN_f("POSLIN",THRES_HIGH)]
 	else:
 		A = -A
-		f = [thres(THRES),poslin(0,0,0)]
+		f = [ESN_f("THRES",THRES),ESN_f("POSLIN",0)]
 
 	return A,B,f
 
-def make_trigger(M,direct_input=True,random_thres=False,turn_on=True):
+def make_trigger(M, direct_input, random_thres, turn_on):
 	if direct_input:
 		B = ESN_B("SELECTED",M,3)
 		B[1,:] = 0
@@ -154,29 +163,88 @@ def make_trigger(M,direct_input=True,random_thres=False,turn_on=True):
 		THRES = 0
 
 	if turn_on:
-		f = [thres(THRES), thres(0), poslin(THRES_HIGH,0,0)]
+		f = [ESN_f("THRES",THRES), ESN_f("THRES",0), ESN_f("POSLIN",THRES_HIGH)]
 		A = sparse.diags([[0,THRES_HIGH,0],[1,THRES_HIGH]],[0,-1])
 	else:
-		f = [thres(THRES), thres(0), poslin(0,0,0)]
+		f = [ESN_f("THRES",THRES), ESN_f("THRES",0), ESN_f("POSLIN",0)]
 		A = sparse.diags([[0,THRES_HIGH,0],[1,-THRES_HIGH]],[0,-1])
 
 	return A,B,f
 
 class Component:
-	def __init__(self,M,N,topology,A_arch="",r=0,B_arch="",v=0,f_arch=""): # f_arch a.k.a. activation
-		if topology == "FLEX":
-			self.A = [ESN_A(A_arch,N,r)]
-			self.B = [ESN_B(B_arch,M,N,v)]
-			self.f = [ESN_f(f_arch) for i in range(N)]
-		elif topology == "THRES":
-			pass
-		elif topology == "TRIGGER":
-			pass
-		elif topology == "HEIGHTSENS":
-			pass
-		elif topology == "ANOM":
-			pass
+	def __init__(self,N): # f_arch a.k.a. activation
+		self.N = N
+		self.internal_input = []
 
+	def get_matrices(self):
+		return [self.A],[self.B],self.f
+
+	def get_typename(self):
+		return type(self).__name__
+
+	def set_internal_input(self,other):
+		self.internal_input.extend(other)
+
+	def set_input_idx(self,idx):
+		self.input_idx = idx
+
+	#def get_input_idx(self):
+	#	return self.input_index
+
+	def get_output_idx(self):
+		return self.input_idx + self.N - 1
+
+	def get_index_groups(self):
+		if self.common_f:
+			return [(self.input_idx,self.get_output_idx()+1)]
+		else:
+			return [(i,i+1) for i in range(self.input_idx,self.get_output_idx()+1)]
+
+class VAR(Component):
+	def __init__(self,M,p):
+		p = p + 1 # to agree with common notation
+		super(VAR,self).__init__(M*p)
+		self.common_f = True
+
+		self.A = [ESN_A("DLR",p,r=1) for i in range(M)]
+		self.A = sparse.block_diag(self.A)
+		self.B = [ESN_B("SINGLE",M,p,external_input=i) for i in range(M)]
+		self.B = np.concatenate(self.B,axis=0)
+		self.f = [ESN_f("LIN")]
+	
+class DIRECT(Component):
+	def __init__(self,M):
+		super(DIRECT,self).__init__(M)
+		self.common_f = True
+
+		self.A = ESN_A("DLR",self.N,r=0)
+		self.B = ESN_B("DIRECT",self.N)
+		self.f = [ESN_f("LIN")]
+
+class RODAN(Component):
+	def __init__(self,M,N):
+		super(RODAN,self).__init__(N)
+		self.common_f = True
+
+		self.A = ESN_A("DLR",self.N,r=0.5)
+		self.B = ESN_B("SECTIONS",M,N)
+		self.f = [ESN_f("TANH")]
+
+class THRES(Component):
+	def __init__(self,M,N=1,direct_input=True,random_thres=False,turn_on=True):
+		super(THRES,self).__init__(2)
+		self.common_f = False
+
+		self.A,self.B,self.f = make_thres(M,direct_input,random_thres,turn_on)
+
+class TRIGGER(Component):
+	def __init__(self,M,N=1,direct_input=True,random_thres=False,turn_on=True):
+		super(TRIGGER,self).__init__(3)
+		self.common_f = False
+
+		self.A,self.B,self.f = make_trigger(M,direct_input,random_thres,turn_on)
+
+'''
 components = {"AR": ["FLEX","DLR",1,"SECTIONS_INIT",1,"LIN"],
 			  "RODAN": ["FLEX","DLR",0.5,"SECTIONS",1,"TANH"],
 			  "DIRECT": ["FLEX","DLR",0,"DIRECT",1,"LIN"],
@@ -184,24 +252,64 @@ components = {"AR": ["FLEX","DLR",1,"SECTIONS_INIT",1,"LIN"],
 			  "TRIGGER": ["TRIGGER"],
 			  "HEIGHTSENS": ["HEIGHTSENS"],
 			  "ANOM": ["ANOM"]}
+'''
+
+# example:
+# spec = {"DIRECT": None,"VAR": {"p": 5}, "RODAN": {"N": 200}, "THRES": {"random_thres": True, "N": 20}}
+# Will make VAR component with memory 5, direct component (superflous since VAR), one component as described
+# in [Rodan2011] with 200 nodes, and 20 threshold components with direct input from externals and random thresholds.
 
 def compound_ESN(spec,M):
-	A_comps = []
-	B_comps = []
-	f_comps = []
+	components = []
 
 	for key in spec:
-		comp = Component(M,spec[key],*components[key])
-		A_comps += comp.A
-		B_comps += comp.B
-		f_comps += comp.f
+		comp_spec = spec[key]
+		if key == "VAR":
+			comp = [VAR(M,**comp_spec)]
+		elif key == "DIRECT":
+			comp = [DIRECT(M)]
+		elif key == "RODAN":
+			comp = [RODAN(M,**comp_spec)]
+		elif key == "THRES":
+			comp = [THRES(M,**comp_spec) for i in range(comp_spec["N"])]
+		elif key == "TRIGGER":
+			comp = [TRIGGER(M,**comp_spec) for i in range(comp_spec["N"])]
+		
+		components += comp
 
-	A = sparse.block_diag(A_comps)
-	B = np.concatenate(B_comps,axis=0)
-	f = f_comps
-	#f = lambda x: np.array([f_comp(x_elem) for x_elem,f_comp in zip(x,f_comps)]).reshape(x.shape)
+	return components
 
-	return A,B,f
+# turns list of lists into list
+def flatten(lst):
+	return [elem for sublist in lst for elem in sublist]
+
+def set_input_idxs(components):
+	lengths = [comp.N for comp in components]
+	lengths.insert(0,0)
+	accum_lengths = np.cumsum(lengths)[:-1]
+
+	for comp,start in zip(components,accum_lengths):
+		comp.set_input_idx(start)
+
+def get_index_groups(components):
+	set_input_idxs(components)
+	return flatten([comp.get_index_groups() for comp in components])
+
+def generate_matrices(components):
+	A = sparse.block_diag([comp.A for comp in components])
+	B = np.concatenate([comp.B for comp in components],axis=0)
+	f = flatten([comp.f for comp in components])
+
+	idx_groups = get_index_groups(components)
+
+	A = A.tocsr()
+	for comp in components:
+		i = comp.input_idx
+		for j in comp.internal_input:
+			A[i,j] = 1 # direct for now
+
+
+	return A,B,f,idx_groups
 
 
 

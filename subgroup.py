@@ -52,12 +52,12 @@ def fetch(args):
 	elif dataset == "ESN_SIM":
 		if args.filename:
 			data = sim.read(args.filename,args.elemsep,args.linesep)
-			data = [pp.normalize(dat) for dat in data]
+			#data = [pp.normalize(dat) for dat in data]
 		else:
 			num_timepoints = args.settings["num_timepoints"]
 			case = args.settings["ESN_sim_case"]
 			data = [sim.esn_sim(num_timepoints,case) for i in range(10)]
-			data = [pp.normalize(dat) for dat in data]
+			#data = [pp.normalize(dat) for dat in data]
 			sim.write(data,"ESN",args)
 
 		N = aux.num_features(data[0])
@@ -316,6 +316,10 @@ def subgroup_select(mod,models,args):
 	return False
 
 ## Main
+
+# example:
+# spec = {"DIRECT": None,"VAR": {"p": 5}, "RODAN": {"N": 200}, "THRES": {"random_thres": True, "N": 20}}
+
 def settings(args):
 	num_series = 10
 
@@ -328,8 +332,11 @@ def settings(args):
 				"failure_horizon": 10, "pos_w": 5, "style": "MLP", # SVM 
 				#"A_architecture": "DLR", "B_architecture": "SECTIONS", "C_architecture": "SELECTED", "f_architecture": "TANH", # ESN
 				#"ESN_size_state": 500, 
-				"ESN_spec": {"RODAN": 30,"AR":20},
-				"ESN_size_out": 10, # ESN
+				"ESN_spec": {"RODAN": {"N": 200},
+							"VAR": {"p": 4}, 
+							"THRES": {"N": 20}
+							},
+				"ESN_size_out": 40, # ESN
 				"ESN_burn_in": 10,"ESN_batch_train" : True,"ESN_tikhonov_const": 3,  # ESN training
 				"ESN_sim_case": "thres_sum_waves"
 				}
