@@ -152,21 +152,29 @@ def train(data,subgroup,train_type,args):
 		#f_arch = args.settings["f_architecture"]
 		#size_nodes = args.settings["ESN_size_state"]
 		spec = args.settings["ESN_spec"]
+		mixing = args.settings["ESN_mixing"]
 		size_out = args.settings["ESN_size_out"]
-		re_series = args.settings["re_series"]
-		rw_series = args.settings["rw_series"]
+		#re_series = args.settings["re_series"]
+		#rw_series = args.settings["rw_series"]
 		burn_in = args.settings["ESN_burn_in"]
-		batch_train = args.settings["ESN_batch_train"]
+		#batch_train = args.settings["ESN_batch_train"]
 		tikho = args.settings["ESN_tikhonov_const"]
 		style = args.test_type
 
-		mods = [aux.train_esn(data,subgroup,style,[N,size_out,N],spec,re_series,rw_series,burn_in,batch_train,tikho)]
+		orders = [N,size_out,N]
+		mod = Models.ESN(style,orders,spec,mixing)
+		mod.subgroup = subgroup
 
-		mods[0].print_esn()
+		if args.test_type == "PREDICTION":
+			mods = [aux.train_esn(mod,data,orders,burn_in,tikho)]
+		elif args.test_type == "CLASSIFICATION":
+			mods = [aux.train_esn_classification(mod,data,orders,burn_in,tikho)]
+
+		#mods[0].print_esn()
 
 	elif train_type == "SVM":
 		mod = Models.SVM_TS(subgroup,args.settings["pos_w"],args.settings["style"])
-		for X,y in aux.impending_failure(data,args.test_names,args.dataset,args.settings["failure_horizon"],mod.style):
+		for X,y in aux.impending_failure(data,args.train_names,args.dataset,args.settings["failure_horizon"],mod.style):
 			mod.update(X,y)
 
 		mod.train()
@@ -223,7 +231,7 @@ def test(train_data,test_data,models,args):
 			mod = models[0] # assume that there is just one at first
 			#print(len(test_data))
 			#print(len(args.test_names))
-			for X,y in aux.impending_failure(test_data,args.train_names,args.dataset,args.settings["failure_horizon"],mod.style):
+			for X,y in aux.impending_failure(test_data,args.test_names,args.dataset,args.settings["failure_horizon"],mod.style):
 				X = X[:,mod.subgroup]
 				pred.append(mod.predict(X))
 				labels.append(y)
@@ -328,17 +336,20 @@ def settings(args):
 				"VARMA_p": 2, "VARMA_q": 0, "ARMA_q": 2, # VARMA orders
 				"re_series": np.logspace(-1,-6,num_series), "rw_series": 500*np.logspace(0,-1,num_series), # VARMA training
 				"num_timepoints": 1000, "num_samples": 50, "case": "case1", # VARMA sim
-				"train_share": 0.1, "test_share": 0.1, # splitting
+				"train_share": 0.4, "test_share": 0.1, # splitting
 				"failure_horizon": 10, "pos_w": 5, "style": "MLP", # SVM 
 				#"A_architecture": "DLR", "B_architecture": "SECTIONS", "C_architecture": "SELECTED", "f_architecture": "TANH", # ESN
 				#"ESN_size_state": 500, 
-				"ESN_spec": {"RODAN": {"N": 200},
-							"VAR": {"p": 4}, 
-							"THRES": {"N": 20}
-							},
-				"ESN_size_out": 40, # ESN
+				"ESN_spec": [("RODAN", {"N": 200}),
+							("VAR", {"p": 4}),
+							("THRES", {"N": 30}),
+							("TRIGGER", {"N": 40,"random_thres": True}),
+							("RODAN", {"N": 2})
+							],
+				"ESN_size_out": 20, # ESN
 				"ESN_burn_in": 10,"ESN_batch_train" : True,"ESN_tikhonov_const": 3,  # ESN training
-				"ESN_sim_case": "thres_sum_waves"
+				"ESN_sim_case": "random_trigger_waves", # ESN sim
+				"ESN_mixing": [("TRIGGER","RODAN",30),("THRES","RODAN",30)]
 				}
 
 	args.settings = settings

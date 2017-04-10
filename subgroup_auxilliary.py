@@ -260,22 +260,22 @@ def plot_train(A_hist,C_hist,train_type):
 
 	plt.show()
 
-def train_esn(data,subgroup,style,orders,spec,re_series,rw_series,burn_in,batch_train,tikho):
-	mod = Models.ESN(style,orders,spec)
+def train_esn(mod,data,orders,burn_in,tikho):
 
 	__,size_out,size_label = orders
 	C_hist = np.zeros([1,size_label,size_out])
 
-	if batch_train:
-		for dat in data:
-			mod.reset()
-			for y in dat[:burn_in,:]:
-				mod.update(y)
-			C_h = mod.learn_batch(dat[burn_in:,:],tikho=tikho)
-			#print(C_h.shape)
-			#print(C_hist.shape)
-			C_hist = np.concatenate([C_hist,C_h],axis=0)
-					
+	#if batch_train:
+	for dat in data:
+		mod.reset()
+		for y in dat[:burn_in,:]:
+			mod.update(y)
+		C_h = mod.learn_batch(dat[burn_in:,:],tikho=tikho)
+		#print(C_h.shape)
+		#print(C_hist.shape)
+		C_hist = np.concatenate([C_hist,C_h],axis=0)
+		
+	'''			
 	else:
 		i = 0
 		for dat in data:
@@ -291,6 +291,7 @@ def train_esn(data,subgroup,style,orders,spec,re_series,rw_series,burn_in,batch_
 				#print(C_h.shape)
 				C_hist = np.concatenate([C_hist,C_h[:-1]],axis=0)
 			i += 1
+	'''
 
 	mod.reset()
 
@@ -307,8 +308,6 @@ def train_esn(data,subgroup,style,orders,spec,re_series,rw_series,burn_in,batch_
 	#print("Averaging, error: " + str(np.linalg.norm(gt_A-A[:3,:3])))
 	
 	mod.set_Cw(C)
-
-	mod.subgroup = subgroup
 
 	return mod
 

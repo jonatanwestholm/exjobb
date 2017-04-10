@@ -210,7 +210,7 @@ class VARMA(MTS_Model):
 
 class ESN(MTS_Model):
 
-	def __init__(self,style,orders,spec):
+	def __init__(self,style,orders,spec,mixing):
 		self.style = style
 		size_in,size_out,size_label = orders
 		self.M = size_in
@@ -224,7 +224,7 @@ class ESN(MTS_Model):
 		#self.f_noise = lambda x: self.f(x) + np.random.normal(0,0.1,x.shape)#1/(1+np.exp(-x))
 		self.components = mod_aux.compound_ESN(spec,self.M)
 		self.A,self.B,self.f,self.idx_groups = mod_aux.generate_matrices(self.components)
-
+		self.apply_mixing(mixing)
 		'''
 		self.B = np.array([[-1,0,0,0],
 						   [0,1,0,0],
@@ -253,6 +253,12 @@ class ESN(MTS_Model):
 
 	def reset(self):
 		self.X = np.zeros([self.N,1])
+
+	def apply_mixing(self,mixing):
+		archs = mod_aux.mixing(self.components,mixing,False)
+		for arch in archs:
+			row,col = arch
+			self.A[row,col] = 1
 
 	def initiate_kalman(self,re,rw):
 		self.learners = [Kalman(self.Oh,re,rw) for i in range(self.L)]

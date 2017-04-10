@@ -188,8 +188,8 @@ class Component:
 	def set_input_idx(self,idx):
 		self.input_idx = idx
 
-	#def get_input_idx(self):
-	#	return self.input_index
+	def get_input_idx(self):
+		return [self.input_index]
 
 	def get_output_idx(self):
 		return self.input_idx + self.N - 1
@@ -230,6 +230,9 @@ class RODAN(Component):
 		self.B = ESN_B("SECTIONS",M,N)
 		self.f = [ESN_f("TANH")]
 
+	def get_input_idx(self):
+		return list(range(self.input_idx,self.get_output_idx()))
+
 class THRES(Component):
 	def __init__(self,M,N=1,direct_input=True,random_thres=False,turn_on=True):
 		super(THRES,self).__init__(2)
@@ -262,8 +265,8 @@ components = {"AR": ["FLEX","DLR",1,"SECTIONS_INIT",1,"LIN"],
 def compound_ESN(spec,M):
 	components = []
 
-	for key in spec:
-		comp_spec = spec[key]
+	for key,comp_spec in spec:
+		#key,comp_spec = spec
 		if key == "VAR":
 			comp = [VAR(M,**comp_spec)]
 		elif key == "DIRECT":
@@ -302,7 +305,7 @@ def generate_matrices(components):
 
 	idx_groups = get_index_groups(components)
 
-	A = A.tocsr()
+	A = A.tolil()
 	for comp in components:
 		i = comp.input_idx
 		for j in comp.internal_input:
@@ -311,8 +314,28 @@ def generate_matrices(components):
 
 	return A,B,f,idx_groups
 
+def get_all_input_idxs(components,comp_type):
+	return flatten([comp.get_input_idx() for comp in components if type(comp).__name__ == comp_type])
 
+def get_all_output_idxs(components,comp_type):
+	return [comp.get_output_idx() for comp in components if type(comp).__name__ == comp_type]
 
+# transfers = [("SOURCE","TARGET",number), ...]
+# archs = [(row,column), ...]
+def mixing(components,transfers,replace):
+	archs = []
+	for transfer in transfers:
+		sources = get_all_output_idxs(components,transfer[0])
+		targets = get_all_input_idxs(components,transfer[1])
+		
+		num = transfer[2]
+		selected_sources = np.random.choice(sources,num,replace)
+		selected_targets = np.random.choice(targets,num,replace)
+
+		for source,target in zip(selected_sources,selected_targets):
+			archs.append((target,source))
+
+	return archs
 
 
 

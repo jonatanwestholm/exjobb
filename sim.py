@@ -7,6 +7,7 @@ import glob
 import numpy as np 
 import scipy.signal as ssignal
 import scipy.linalg as slinalg
+import copy
 
 import preprocessing as pp
 
@@ -185,6 +186,28 @@ def esn_sim(T,case):
 		wave1 = wave1[1:]
 		wave2 = wave2[1:]
 		composite = composite[:-1]
+
+		y = np.concatenate([switch,wave1,wave2,composite],axis=1)
+	elif case == "trigger_waves":
+		switch = np.zeros([T,1])
+		switch_time = 200
+		switch[switch_time] = 1
+		wave1 = sin_signal(T,50)+5
+		wave2 = sin_signal(T,20)+5
+		composite = copy.deepcopy(wave1)
+		composite[switch_time:] = wave2[switch_time:]
+
+		y = np.concatenate([switch,wave1,wave2,composite],axis=1)
+	elif case == "random_trigger_waves":
+		switch = np.random.normal(0,1,[T,1])
+		trigger_level = 2.7
+		switch_time = np.where(switch > trigger_level)[0][0]
+		switch[switch_time] = 1
+		wave1 = sin_signal(T,50)+5
+		wave2 = sin_signal(T,20)+5
+		composite = copy.deepcopy(wave1)
+
+		composite[switch_time:] = wave2[switch_time:]
 
 		y = np.concatenate([switch,wave1,wave2,composite],axis=1)
 
