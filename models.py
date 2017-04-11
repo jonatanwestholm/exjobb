@@ -210,8 +210,8 @@ class VARMA(MTS_Model):
 
 class ESN(MTS_Model):
 
-	def __init__(self,style,orders,spec,mixing):
-		self.style = style
+	def __init__(self,purpose,orders,spec,mixing):
+		self.purpose = purpose
 		size_in,size_out,size_label = orders
 		self.M = size_in
 		self.Oh = size_out
@@ -238,6 +238,9 @@ class ESN(MTS_Model):
 		self.N = self.total_size()
 		
 		#self.B_array = self.B.toarray()
+
+		self.inputs = []
+		self.outputs = []
 
 		self.learners = None
 		self.first = 1
@@ -359,7 +362,7 @@ class ESN(MTS_Model):
 			X = self.update(y)
 			X_vec[i,:] = np.ravel(X)
 
-		if not labels:
+		if labels == []:
 			X_vec = X_vec[:-1,:]
 			Y_vec = Y[1:,:]
 		else:
@@ -406,6 +409,27 @@ class ESN(MTS_Model):
 		self.Cw = np.linalg.lstsq(XX,XY)[0]
 		return np.reshape(self.Cw.T,[1]+list(self.Cw.T.shape))
 
+	def charge(self,X,y=[]):
+		self.inputs.append(X)
+		self.outputs.append(y)
+
+	def train(self,burn_in,tikho):
+		C_hist = np.zeros([1,self.L,self.Oh])
+
+		for X,y in zip(self.inputs,self.outputs):
+			self.reset()
+			self.update(X[:burn_in,:])
+
+			C_h = self.learn_batch(X[burn_in:,:],y[burn_in:],tikho=tikho)
+			#print(C_h.shape)
+			#print(C_hist.shape)
+			C_hist = np.concatenate([C_hist,C_h],axis=0)
+		
+		C_hist = C_hist[1:]
+		C = np.mean(C_hist,axis=0)
+		#print_mat(C)
+		self.set_Cw(C)
+
 	def out(self,X=[]):
 		if X == []:
 			X = self.X
@@ -414,10 +438,10 @@ class ESN(MTS_Model):
 		return np.dot(self.Cw,Ys)
 
 	def predict(self,k):
-		if self.style == "CLASSIFICATION":
+		if self.purpose == "CLASSIFICATION":
 			U = np.zeros([self.M,1])
 			X = self.update_private(U,self.X,k-1,noise=False)
-		elif self.style == "PREDICTION":
+		elif self.purpose == "PREDICTION":
 			X = self.X
 			for i in range(k-1):
 				y = self.out(X)
@@ -554,7 +578,7 @@ class SVM_TS:
 			self.sv = MLPClassifier(solver='lbfgs', alpha=1e-5,
                     				hidden_layer_sizes=(10,3), random_state=1)
 
-	def update(self,X,y):
+	def charge(self,X,y):
 		if self.style == "SVC":
 			w = np.ones_like(y)
 			w[y==1] = self.pos_w

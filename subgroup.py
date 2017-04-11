@@ -127,6 +127,7 @@ def candidate_generate(train_data,remaining,num,args):
 # returns models = [obj]
 def train(data,subgroup,train_type,args):
 	#print(np.shape(data[0]))
+	test_type = args.test_type
 	N = aux.num_features(data[0])
 
 	if train_type == "TRIVIAL":
@@ -159,25 +160,39 @@ def train(data,subgroup,train_type,args):
 		burn_in = args.settings["ESN_burn_in"]
 		#batch_train = args.settings["ESN_batch_train"]
 		tikho = args.settings["ESN_tikhonov_const"]
-		style = args.test_type
+		purpose = args.test_type
 
-		orders = [N,size_out,N]
-		mod = Models.ESN(style,orders,spec,mixing)
+		if test_type == "PREDICTION":
+			orders = [N,size_out,N]
+		elif test_type == "CLASSIFICATION":
+			orders = [N,size_out,1]
+
+		mod = Models.ESN(purpose,orders,spec,mixing)
 		mod.subgroup = subgroup
 
-		if args.test_type == "PREDICTION":
-			mods = [aux.train_esn(mod,data,orders,burn_in,tikho)]
-		elif args.test_type == "CLASSIFICATION":
-			mods = [aux.train_esn_classification(mod,data,orders,burn_in,tikho)]
+		if test_type == "PREDICTION":
+			for dat in data:
+				mod.charge(dat)
+
+			mod.train(burn_in,tikho)
+
+			mods = [mod]
+		elif test_type == "CLASSIFICATION":
+			mod.style = args.settings["style"]
 
 		#mods[0].print_esn()
 
 	elif train_type == "SVM":
 		mod = Models.SVM_TS(subgroup,args.settings["pos_w"],args.settings["style"])
-		for X,y in aux.impending_failure(data,args.train_names,args.dataset,args.settings["failure_horizon"],mod.style):
-			mod.update(X,y)
 
-		mod.train()
+	if args.test_type == "CLASSIFICATION":
+		for X,y in aux.impending_failure(data,args.train_names,args.dataset,args.settings["failure_horizon"],mod.style):
+			mod.charge(X,y)
+
+		if train_type == "SVM":
+			mod.train()
+		elif train_type == "ESN":
+			mod.train(burn_in,tikho)
 
 		mods = [mod]
 
@@ -236,6 +251,16 @@ def test(train_data,test_data,models,args):
 				pred.append(mod.predict(X))
 				labels.append(y)
 
+		elif args.model == "ESN":
+			mod = models[0] # assume that there is just one at first
+			#print(len(test_data))
+			#print(len(args.test_names))
+			for X,y in aux.impending_failure(test_data,args.test_names,args.dataset,args.settings["failure_horizon"],mod.style):
+				X = X[:,mod.subgroup]
+				mod.update(X)
+				pred.append(mod.predict(k))
+				labels.append(y)
+			
 			#pred = np.concatenate(pred)
 			#labels = np.concatenate(labels)
 
@@ -336,7 +361,7 @@ def settings(args):
 				"VARMA_p": 2, "VARMA_q": 0, "ARMA_q": 2, # VARMA orders
 				"re_series": np.logspace(-1,-6,num_series), "rw_series": 500*np.logspace(0,-1,num_series), # VARMA training
 				"num_timepoints": 1000, "num_samples": 50, "case": "case1", # VARMA sim
-				"train_share": 0.4, "test_share": 0.1, # splitting
+				"train_share": 0.1, "test_share": 0.1, # splitting
 				"failure_horizon": 10, "pos_w": 5, "style": "MLP", # SVM 
 				#"A_architecture": "DLR", "B_architecture": "SECTIONS", "C_architecture": "SELECTED", "f_architecture": "TANH", # ESN
 				#"ESN_size_state": 500, 
