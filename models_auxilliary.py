@@ -171,6 +171,25 @@ def make_trigger(M, direct_input, random_thres, turn_on):
 
 	return A,B,f
 
+class Node:
+	def __init__(self,input_idx,output_idx):
+		self.input_idx = input_idx
+		self.output_idx = output_idx
+		self.inputs = []
+		self.outputs = []
+
+	def set_external_inputs(self,external_inputs):
+		self.external_inputs = external_inputs
+
+	def set_input(self,other,weight):
+		self.inputs.append((other,weight))
+
+	def set_output(self,other,weight):
+		self.outputs.append((other,weight))
+
+	def backpropagate(self):
+		pass
+
 class Component:
 	def __init__(self,N): # f_arch a.k.a. activation
 		self.N = N
@@ -182,8 +201,8 @@ class Component:
 	def get_typename(self):
 		return type(self).__name__
 
-	def set_internal_input(self,other):
-		self.internal_input.extend(other)
+	def set_internal_input(self,other,idx):
+		self.internal_input.extend((idx,other))
 
 	def set_input_idx(self,idx):
 		self.input_idx = idx
@@ -199,6 +218,29 @@ class Component:
 			return [(self.input_idx,self.get_output_idx()+1)]
 		else:
 			return [(i,i+1) for i in range(self.input_idx,self.get_output_idx()+1)]
+
+	def build_nodes(self,input_idx):
+		self.set_input_idx(input_idx)
+		self.nodes = self.matrix_to_nodes(self.A)
+
+	def matrix_to_nodes(self,A):
+		A = A.tocsr()
+		nodes = []
+
+		start = self.input_idx
+		nodes = [Node(start+idx,start+idx) for idx in range(A.shape[0])]
+
+		for idx,row in enumerate(A):
+			node = nodes[idx]
+			nonzero = np.nonzero(row.toarray()[0])[0]
+			for other_idx in nonzero:
+				other = nodes[other_idx]
+
+				weight = A[idx,other_idx]
+				node.set_input(other,weight)
+				other.set_output(node,weight)
+
+		return nodes
 
 class VAR(Component):
 	def __init__(self,M,p):
@@ -218,7 +260,7 @@ class DIRECT(Component):
 		self.common_f = True
 
 		self.A = ESN_A("DLR",self.N,r=0)
-		self.B = ESN_B("DIRECT",self.N)
+		self.B = ESN_B("DIRECT",self.N,self.N)
 		self.f = [ESN_f("LIN")]
 
 class RODAN(Component):
@@ -240,12 +282,20 @@ class THRES(Component):
 
 		self.A,self.B,self.f = make_thres(M,direct_input,random_thres,turn_on)
 
+	def build_nodes(self,input_idx):
+		self.set_input_idx(input_idx)
+		self.nodes = [Node(self.input_idx,self.get_output_idx())]
+
 class TRIGGER(Component):
 	def __init__(self,M,N=1,direct_input=True,random_thres=False,turn_on=True):
 		super(TRIGGER,self).__init__(3)
 		self.common_f = False
 
 		self.A,self.B,self.f = make_trigger(M,direct_input,random_thres,turn_on)
+
+	def build_nodes(self,input_idx):
+		self.set_input_idx(input_idx)
+		self.nodes = [Node(self.input_idx,self.get_output_idx())]
 
 '''
 components = {"AR": ["FLEX","DLR",1,"SECTIONS_INIT",1,"LIN"],
@@ -262,82 +312,109 @@ components = {"AR": ["FLEX","DLR",1,"SECTIONS_INIT",1,"LIN"],
 # Will make VAR component with memory 5, direct component (superflous since VAR), one component as described
 # in [Rodan2011] with 200 nodes, and 20 threshold components with direct input from externals and random thresholds.
 
-def compound_ESN(spec,M):
-	components = []
-
-	for key,comp_spec in spec:
-		#key,comp_spec = spec
-		if key == "VAR":
-			comp = [VAR(M,**comp_spec)]
-		elif key == "DIRECT":
-			comp = [DIRECT(M)]
-		elif key == "RODAN":
-			comp = [RODAN(M,**comp_spec)]
-		elif key == "THRES":
-			comp = [THRES(M,**comp_spec) for i in range(comp_spec["N"])]
-		elif key == "TRIGGER":
-			comp = [TRIGGER(M,**comp_spec) for i in range(comp_spec["N"])]
-		
-		components += comp
-
-	return components
-
 # turns list of lists into list
 def flatten(lst):
 	return [elem for sublist in lst for elem in sublist]
 
-def set_input_idxs(components):
-	lengths = [comp.N for comp in components]
-	lengths.insert(0,0)
-	accum_lengths = np.cumsum(lengths)[:-1]
-
-	for comp,start in zip(components,accum_lengths):
-		comp.set_input_idx(start)
-
-def get_index_groups(components):
-	set_input_idxs(components)
-	return flatten([comp.get_index_groups() for comp in components])
-
-def generate_matrices(components):
-	A = sparse.block_diag([comp.A for comp in components])
-	B = np.concatenate([comp.B for comp in components],axis=0)
-	f = flatten([comp.f for comp in components])
-
-	idx_groups = get_index_groups(components)
-
-	A = A.tolil()
-	for comp in components:
-		i = comp.input_idx
-		for j in comp.internal_input:
-			A[i,j] = 1 # direct for now
-
-
-	return A,B,f,idx_groups
 
 def get_all_input_idxs(components,comp_type):
-	return flatten([comp.get_input_idx() for comp in components if type(comp).__name__ == comp_type])
+	return flatten([comp.get_input_idx() for comp in components if comp.get_typename() == comp_type])
 
 def get_all_output_idxs(components,comp_type):
-	return [comp.get_output_idx() for comp in components if type(comp).__name__ == comp_type]
+	return [comp.get_output_idx() for comp in components if comp.get_typename() == comp_type]
 
 # transfers = [("SOURCE","TARGET",number), ...]
 # archs = [(row,column), ...]
-def mixing(components,transfers,replace):
-	archs = []
-	for transfer in transfers:
-		sources = get_all_output_idxs(components,transfer[0])
-		targets = get_all_input_idxs(components,transfer[1])
-		
-		num = transfer[2]
-		selected_sources = np.random.choice(sources,num,replace)
-		selected_targets = np.random.choice(targets,num,replace)
-
-		for source,target in zip(selected_sources,selected_targets):
-			archs.append((target,source))
-
-	return archs
 
 
+class Reservoir:
+	def __init__(self,M,spec,mixing_spec,replace):
+		self.build(M,spec)
+		self.mix(mixing_spec,replace)
 
+	def get_matrices(self):
+		A = self.get_reservoir_matrix()
+		B = np.concatenate([comp.B for comp in self.components],axis=0)
+		f = flatten([comp.f for comp in self.components])
+		idx_groups = self.get_index_groups()
+
+		return A,B,f,idx_groups
+
+	def total_size(self):
+		total = 0
+		for comp in self.components:
+			total += comp.N
+
+		return total
+
+	def build(self,M,spec):
+		components = []
+
+		for key,comp_spec in spec:
+			#key,comp_spec = spec
+			if key == "VAR":
+				comp = [VAR(M,**comp_spec)]
+			elif key == "DIRECT":
+				comp = [DIRECT(M)]
+			elif key == "RODAN":
+				comp = [RODAN(M,**comp_spec)]
+			elif key == "THRES":
+				comp = [THRES(M,**comp_spec) for i in range(comp_spec["N"])]
+			elif key == "TRIGGER":
+				comp = [TRIGGER(M,**comp_spec) for i in range(comp_spec["N"])]
+			
+			components += comp
+
+		self.components = components
+
+	def mix(self,mixing_spec,replace):
+		for transfer in mixing_spec:
+			sources = get_nodes_of_type(transfer[0])
+			targets = get_nodes_of_type(transfer[1])
+
+			if sources != [] and targets != []:
+				num = transfer[2]
+				selected_sources = np.random.choice(sources,num,replace)
+				selected_targets = np.random.choice(targets,num,replace)
+
+				weight = 1
+				for source,target in zip(selected_sources,selected_targets):
+					source.set_output(target,weight)
+					target.set_output(source,weight)
+
+	def get_nodes(self): # return all nodes in reservoir as list
+		return flatten([comp.nodes for comp in components])
+
+	def get_nodes_of_type(self,comp_type): # return all nodes of a certain type
+		return flatten([comp.nodes for comp in self.components if comp.get_typename() == comp_type])
+
+	def set_input_idxs(self):
+		lengths = [comp.N for comp in self.components]
+		lengths.insert(0,0)
+		accum_lengths = np.cumsum(lengths)[:-1]
+
+		for comp,start in zip(self.components,accum_lengths):
+			comp.set_input_idx(start)
+
+	def get_index_groups(self):
+		self.set_input_idxs()
+		return flatten([comp.get_index_groups() for comp in self.components])
+
+	def get_reservoir_matrix(self):
+		N = self.total_size()
+		nodes = self.get_nodes()
+
+		A = sparse.identity(N)*0 # zero matrix
+		A = A.tolil()
+
+		for node in nodes:
+			for other,weight in node.inputs:
+				A[node.input_idx,other.output_idx] = weight
+
+		A = A.tocsr()
+		return A		
+
+	def print_reservoir(self):
+		pass
 
 

@@ -217,25 +217,13 @@ class ESN(MTS_Model):
 		self.Oh = size_out
 		self.L = size_label
 		
-		#self.A = mod_aux.ESN_A(architectures[0],self.N)
-		#self.B = mod_aux.ESN_B(architectures[1],self.M,self.N)
-		#self.Cs = mod_aux.ESN_C(architectures[2],self.N,self.Oh)
-		#self.f = [mod_aux.ESN_f(architectures[3]) for i in range(self.N)]
-		#self.f_noise = lambda x: self.f(x) + np.random.normal(0,0.1,x.shape)#1/(1+np.exp(-x))
-		self.components = mod_aux.compound_ESN(spec,self.M)
-		self.A,self.B,self.f,self.idx_groups = mod_aux.generate_matrices(self.components)
-		self.apply_mixing(mixing)
-		'''
-		self.B = np.array([[-1,0,0,0],
-						   [0,1,0,0],
-						   [1,0,0,0],
-						   [0,0,1,0]])
-		'''
+		self.reservoir = mod_aux.Reservoir(self.M,spec,mixing)
+		self.A,self.B,self.f,self.idx_groups = self.reservoir.get_matrices()
 
 		self.A_array = self.A.toarray()
 		#print(self.A_array)
 
-		self.N = self.total_size()
+		self.N = self.reservoir.total_size()
 		
 		#self.B_array = self.B.toarray()
 
@@ -247,21 +235,8 @@ class ESN(MTS_Model):
 
 		self.reset()
 
-	def total_size(self):
-		total = 0
-		for comp in self.components:
-			total += comp.N
-
-		return total
-
 	def reset(self):
 		self.X = np.zeros([self.N,1])
-
-	def apply_mixing(self,mixing):
-		archs = mod_aux.mixing(self.components,mixing,False)
-		for arch in archs:
-			row,col = arch
-			self.A[row,col] = 1
 
 	def initiate_kalman(self,re,rw):
 		self.learners = [Kalman(self.Oh,re,rw) for i in range(self.L)]
@@ -437,16 +412,27 @@ class ESN(MTS_Model):
 
 		return np.dot(self.Cw,Ys)
 
-	def predict(self,k):
+	def predict(self,k,U=[]):
 		if self.purpose == "CLASSIFICATION":
-			U = np.zeros([self.M,1])
-			X = self.update_private(U,self.X,k-1,noise=False)
+			#U = np.zeros([self.M,1])
+			if is_tensor(U,self.M>1):
+				X = self.update_private(U,self.X,k-1,noise=False)
+				y = self.out(X)
+			else:
+				# note that the prediction changes the state 
+				y = []
+				for u in U:
+					y.append(self.predict(k,u))
+					self.update(u)
+				y = np.concatenate(y,axis=0)
 		elif self.purpose == "PREDICTION":
 			X = self.X
 			for i in range(k-1):
 				y = self.out(X)
 				X = self.update_private(y,X,noise=False)
-		return self.out(X)
+			y = self.out(X)
+
+		return y
 
 	def annealing(self,dat,re_series,rw_series,initiate=False):
 		C_hist = np.zeros([1,self.L,self.Oh])

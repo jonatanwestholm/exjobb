@@ -256,9 +256,10 @@ def test(train_data,test_data,models,args):
 			#print(len(test_data))
 			#print(len(args.test_names))
 			for X,y in aux.impending_failure(test_data,args.test_names,args.dataset,args.settings["failure_horizon"],mod.style):
+				mod.reset()
 				X = X[:,mod.subgroup]
+				pred.append(mod.predict(k,X))
 				mod.update(X)
-				pred.append(mod.predict(k))
 				labels.append(y)
 			
 			#pred = np.concatenate(pred)
@@ -362,14 +363,14 @@ def settings(args):
 				"re_series": np.logspace(-1,-6,num_series), "rw_series": 500*np.logspace(0,-1,num_series), # VARMA training
 				"num_timepoints": 1000, "num_samples": 50, "case": "case1", # VARMA sim
 				"train_share": 0.1, "test_share": 0.1, # splitting
-				"failure_horizon": 10, "pos_w": 5, "style": "MLP", # SVM 
+				"failure_horizon": 800, "pos_w": 5, "style": "SVC", # SVM 
 				#"A_architecture": "DLR", "B_architecture": "SECTIONS", "C_architecture": "SELECTED", "f_architecture": "TANH", # ESN
 				#"ESN_size_state": 500, 
 				"ESN_spec": [("RODAN", {"N": 200}),
 							("VAR", {"p": 4}),
-							("THRES", {"N": 30}),
+							("THRES", {"N": 30,"random_thres":True}),
 							("TRIGGER", {"N": 40,"random_thres": True}),
-							("RODAN", {"N": 2})
+							("DIRECT",None)
 							],
 				"ESN_size_out": 20, # ESN
 				"ESN_burn_in": 10,"ESN_batch_train" : True,"ESN_tikhonov_const": 3,  # ESN training

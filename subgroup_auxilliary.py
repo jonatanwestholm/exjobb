@@ -313,7 +313,7 @@ def train_esn(mod,data,orders,burn_in,tikho):
 
 
 def impending_failure(data,names,dataset,failure_horizon,style):
-	if dataset == "TURBOFAN":
+	if dataset in ["TURBOFAN","ESN_SIM"]:
 		for dat in data:
 			X,y = impending_failure_datapoints(dat,True,failure_horizon,style)
 			yield X,y

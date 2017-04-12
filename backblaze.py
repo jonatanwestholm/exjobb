@@ -172,7 +172,7 @@ def main(args):
 			print("after removing missing and small: "+ str(len(data)))
 
 			# Mathematical preprocessing	
-			extended_features = True
+			extended_features = False
 			if extended_features:		
 				exta = pp.differentiate(data)
 				#data = pp.smooth(data,5)
@@ -186,8 +186,8 @@ def main(args):
 				explanations = explanations + expl_ext
 			else:
 				data = pp.differentiate(data)
-				#data = pp.smooth(data,5)
-				data = pp.filter(data,np.array([1]),np.array([1,-0.8]))
+				#sdata = pp.smooth(data,5)
+				#data = pp.filter(data,np.array([1]),np.array([1,-0.8]))
 
 			data = pp.normalize_all(data,leave_zero=True)
 			print("Qualified indexes: " + str(sorted(idxs)))
