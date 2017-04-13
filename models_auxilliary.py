@@ -8,6 +8,19 @@ esn_component_sizes = {"VAR":1,"RODAN":1,"DIRECT":1,"THRES":2,"TRIGGER":3}
 
 THRES_HIGH = 1000
 
+
+# turns list of lists into list
+def flatten(lst):
+	return [elem for sublist in lst for elem in sublist]
+
+def is_tensor(X,order=2):
+	#print(X)
+	#print(np.shape(X))
+	if sum(np.array(np.shape(X)) > 1) == order:
+		return True
+	else:
+		return False
+
 def ESN_A(architecture,N,r=0.5,b=0.05):
 
 	if architecture == "DLR": # Delay Line Reservoir
@@ -52,6 +65,7 @@ def ESN_A(architecture,N,r=0.5,b=0.05):
 
 		A = r*A
 	'''
+	A = A.tocsr()
 
 	return A
 
@@ -147,6 +161,7 @@ def make_thres(M, direct_input, random_thres, turn_on):
 		A = -A
 		f = [ESN_f("THRES",THRES),ESN_f("POSLIN",0)]
 
+	A = A.tocsr()
 	return A,B,f
 
 def make_trigger(M, direct_input, random_thres, turn_on):
@@ -169,6 +184,7 @@ def make_trigger(M, direct_input, random_thres, turn_on):
 		f = [ESN_f("THRES",THRES), ESN_f("THRES",0), ESN_f("POSLIN",0)]
 		A = sparse.diags([[0,THRES_HIGH,0],[1,-THRES_HIGH]],[0,-1])
 
+	A = A.tocsr()
 	return A,B,f
 
 class Node:
@@ -242,6 +258,15 @@ class Component:
 
 		return nodes
 
+class BIAS(Component):
+	def __init__(self,M):
+		super(BIAS,self).__init__(1)
+		self.common_f = True
+
+		self.A = ESN_A("DLR",1,r=0)
+		self.B = ESN_B("SINGLE",M,1,v=0)
+		self.f = [lambda x: 1]
+
 class VAR(Component):
 	def __init__(self,M,p):
 		p = p + 1 # to agree with common notation
@@ -250,6 +275,7 @@ class VAR(Component):
 
 		self.A = [ESN_A("DLR",p,r=1) for i in range(M)]
 		self.A = sparse.block_diag(self.A)
+		self.A = self.A.tocsr()
 		self.B = [ESN_B("SINGLE",M,p,external_input=i) for i in range(M)]
 		self.B = np.concatenate(self.B,axis=0)
 		self.f = [ESN_f("LIN")]
@@ -312,17 +338,6 @@ components = {"AR": ["FLEX","DLR",1,"SECTIONS_INIT",1,"LIN"],
 # Will make VAR component with memory 5, direct component (superflous since VAR), one component as described
 # in [Rodan2011] with 200 nodes, and 20 threshold components with direct input from externals and random thresholds.
 
-# turns list of lists into list
-def flatten(lst):
-	return [elem for sublist in lst for elem in sublist]
-
-
-def get_all_input_idxs(components,comp_type):
-	return flatten([comp.get_input_idx() for comp in components if comp.get_typename() == comp_type])
-
-def get_all_output_idxs(components,comp_type):
-	return [comp.get_output_idx() for comp in components if comp.get_typename() == comp_type]
-
 # transfers = [("SOURCE","TARGET",number), ...]
 # archs = [(row,column), ...]
 
@@ -330,6 +345,7 @@ def get_all_output_idxs(components,comp_type):
 class Reservoir:
 	def __init__(self,M,spec,mixing_spec,replace):
 		self.build(M,spec)
+		self.build_nodes()
 		self.mix(mixing_spec,replace)
 
 	def get_matrices(self):
@@ -352,7 +368,9 @@ class Reservoir:
 
 		for key,comp_spec in spec:
 			#key,comp_spec = spec
-			if key == "VAR":
+			if key == "BIAS":
+				comp = [BIAS(M)]
+			elif key == "VAR":
 				comp = [VAR(M,**comp_spec)]
 			elif key == "DIRECT":
 				comp = [DIRECT(M)]
@@ -369,8 +387,8 @@ class Reservoir:
 
 	def mix(self,mixing_spec,replace):
 		for transfer in mixing_spec:
-			sources = get_nodes_of_type(transfer[0])
-			targets = get_nodes_of_type(transfer[1])
+			sources = self.get_nodes_of_type(transfer[0])
+			targets = self.get_nodes_of_type(transfer[1])
 
 			if sources != [] and targets != []:
 				num = transfer[2]
@@ -380,24 +398,23 @@ class Reservoir:
 				weight = 1
 				for source,target in zip(selected_sources,selected_targets):
 					source.set_output(target,weight)
-					target.set_output(source,weight)
+					target.set_input(source,weight)
 
 	def get_nodes(self): # return all nodes in reservoir as list
-		return flatten([comp.nodes for comp in components])
+		return flatten([comp.nodes for comp in self.components])
 
 	def get_nodes_of_type(self,comp_type): # return all nodes of a certain type
 		return flatten([comp.nodes for comp in self.components if comp.get_typename() == comp_type])
 
-	def set_input_idxs(self):
+	def build_nodes(self):
 		lengths = [comp.N for comp in self.components]
 		lengths.insert(0,0)
 		accum_lengths = np.cumsum(lengths)[:-1]
 
 		for comp,start in zip(self.components,accum_lengths):
-			comp.set_input_idx(start)
+			comp.build_nodes(start)
 
 	def get_index_groups(self):
-		self.set_input_idxs()
 		return flatten([comp.get_index_groups() for comp in self.components])
 
 	def get_reservoir_matrix(self):
@@ -406,15 +423,102 @@ class Reservoir:
 
 		A = sparse.identity(N)*0 # zero matrix
 		A = A.tolil()
+		print(N)
 
-		for node in nodes:
-			for other,weight in node.inputs:
-				A[node.input_idx,other.output_idx] = weight
+		for comp in self.components:
+			for node in comp.nodes:
+				for other,weight in node.inputs:
+					A[node.input_idx,other.output_idx] = weight
+
+			start = comp.input_idx
+			for i in range(comp.N):
+				for j in range(comp.N):
+					A[start+i,start+j] = comp.A[i,j]
 
 		A = A.tocsr()
 		return A		
 
 	def print_reservoir(self):
-		pass
+		for comp in self.components:
+			for node in comp.nodes:
+				line = comp.get_typename() + ": "
+				line += str(node.input_idx)+" "+str(node.output_idx)+" "
+				line += "--> "+" ".join(["({0:d},{1:.2f})".format(other.output_idx,weight) for other,weight in node.inputs])
+				line += " | "
+				line += " ".join(["({0:d},{1:.2f})".format(other.input_idx,weight) for other,weight in node.outputs]) + " -->"
+				print(line)
 
 
+# helps with learning
+# an object whose states is the weights of other models
+class Kalman:
+	def __init__(self,N,re,rw,A=[],C=[],X=[]):
+		if not A:
+			A = np.eye(N)
+		if not C:
+			C = np.zeros([1,N])
+		if not X:
+			#X = np.zeros([N,1])
+			X = np.random.normal(0,0.1,[N,1])
+		
+		self.N = N
+
+		self.A = A
+		self.C = C
+		self.X = X
+
+		self.Re = self.init_r(re,N)
+		self.Rw = self.init_r(rw,1)
+
+		self.Rxx = self.Re
+		self.Ryy = self.Rw
+
+	def init_r(self,r,N):
+		if is_tensor(r,0):
+			R = np.eye(N)*r
+		elif is_tensor(r,1):
+			R = np.diag(r)
+		elif is_tensor(r,2):
+			R = r
+		return R
+
+	def set_variances(self,re,rw):
+		self.Re = self.init_r(re,self.N)
+		self.Rw = self.init_r(rw,1)		
+
+	def update(self,y,C=[],A=[]):
+		if C == []:
+			C = self.C
+		if A == []:
+			A = self.A
+
+		# inference
+		#print(self.X)
+		K = np.dot(np.dot(self.Rxx,C.T),np.linalg.inv(self.Ryy))
+		self.X = self.X + np.dot(K,y-np.dot(C,self.X))
+		#print(K)
+		#print(y)
+
+		# update
+		eye = np.eye(self.N)
+		Rxx1 = np.dot(eye-np.dot(K,C),self.Rxx)
+		self.Rxx = np.dot(self.A,np.dot(Rxx1,self.A.T)) + self.Re
+		self.Ryy = (np.dot(self.C,np.dot(Rxx1,self.C.T)) + self.Rw).astype(dtype='float64')
+		
+		if np.linalg.norm(self.X) > 10:
+			self.X = np.zeros([self.N,1])
+			self.Rxx = self.Re
+			self.Ryy = self.Rw
+			print("reset X")
+			#print(self.X)
+			#print(self.Re)
+			#print(self.Rw)
+			#time.sleep(0.5)
+
+		#degeneration step
+		#self.X = 0.985*self.X
+
+		return self.X
+
+	def set_X(self,X):
+		self.X = X

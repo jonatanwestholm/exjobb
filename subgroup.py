@@ -147,16 +147,9 @@ def train(data,subgroup,train_type,args):
 		rw_series = args.settings["rw_series"]
 		mods = [aux.train_varma([dat[:,i] for dat in data],[subgroup[i]],p,q,re_series,rw_series) for i in range(N)]
 	elif train_type == "ESN":
-		#A_arch = args.settings["A_architecture"]
-		#B_arch = args.settings["B_architecture"]
-		#C_arch = args.settings["C_architecture"]
-		#f_arch = args.settings["f_architecture"]
-		#size_nodes = args.settings["ESN_size_state"]
 		spec = args.settings["ESN_spec"]
 		mixing = args.settings["ESN_mixing"]
 		size_out = args.settings["ESN_size_out"]
-		#re_series = args.settings["re_series"]
-		#rw_series = args.settings["rw_series"]
 		burn_in = args.settings["ESN_burn_in"]
 		#batch_train = args.settings["ESN_batch_train"]
 		tikho = args.settings["ESN_tikhonov_const"]
@@ -174,7 +167,7 @@ def train(data,subgroup,train_type,args):
 			for dat in data:
 				mod.charge(dat)
 
-			mod.train(burn_in,tikho)
+			mod.train(tikho)
 
 			mods = [mod]
 		elif test_type == "CLASSIFICATION":
@@ -192,7 +185,7 @@ def train(data,subgroup,train_type,args):
 		if train_type == "SVM":
 			mod.train()
 		elif train_type == "ESN":
-			mod.train(burn_in,tikho)
+			mod.train(tikho)
 
 		mods = [mod]
 
@@ -259,7 +252,7 @@ def test(train_data,test_data,models,args):
 				mod.reset()
 				X = X[:,mod.subgroup]
 				pred.append(mod.predict(k,X))
-				mod.update(X)
+				#mod.update(X)
 				labels.append(y)
 			
 			#pred = np.concatenate(pred)
@@ -363,19 +356,20 @@ def settings(args):
 				"re_series": np.logspace(-1,-6,num_series), "rw_series": 500*np.logspace(0,-1,num_series), # VARMA training
 				"num_timepoints": 1000, "num_samples": 50, "case": "case1", # VARMA sim
 				"train_share": 0.1, "test_share": 0.1, # splitting
-				"failure_horizon": 800, "pos_w": 5, "style": "SVC", # SVM 
+				"failure_horizon": 20, "pos_w": 10, "style": "MLP", # SVM 
 				#"A_architecture": "DLR", "B_architecture": "SECTIONS", "C_architecture": "SELECTED", "f_architecture": "TANH", # ESN
 				#"ESN_size_state": 500, 
 				"ESN_spec": [("RODAN", {"N": 200}),
 							("VAR", {"p": 4}),
 							("THRES", {"N": 30,"random_thres":True}),
 							("TRIGGER", {"N": 40,"random_thres": True}),
-							("DIRECT",None)
+							("DIRECT",None),
+							("BIAS",None),
 							],
-				"ESN_size_out": 20, # ESN
+				"ESN_size_out": 40, # ESN
 				"ESN_burn_in": 10,"ESN_batch_train" : True,"ESN_tikhonov_const": 3,  # ESN training
 				"ESN_sim_case": "random_trigger_waves", # ESN sim
-				"ESN_mixing": [("TRIGGER","RODAN",30),("THRES","RODAN",30)]
+				"ESN_mixing": [("TRIGGER","RODAN",40),("THRES","RODAN",30)]
 				}
 
 	args.settings = settings

@@ -260,58 +260,6 @@ def plot_train(A_hist,C_hist,train_type):
 
 	plt.show()
 
-def train_esn(mod,data,orders,burn_in,tikho):
-
-	__,size_out,size_label = orders
-	C_hist = np.zeros([1,size_label,size_out])
-
-	#if batch_train:
-	for dat in data:
-		mod.reset()
-		for y in dat[:burn_in,:]:
-			mod.update(y)
-		C_h = mod.learn_batch(dat[burn_in:,:],tikho=tikho)
-		#print(C_h.shape)
-		#print(C_hist.shape)
-		C_hist = np.concatenate([C_hist,C_h],axis=0)
-		
-	'''			
-	else:
-		i = 0
-		for dat in data:
-			if is_tensor(dat,1):
-				dat = np.reshape(dat,[len(dat),1])
-
-			mod.reset()
-			for y in dat[:burn_in,:]:
-				mod.update(y)
-			C_h = mod.annealing(dat[burn_in:,:],re_series,rw_series,initiate= i == 0) #initiate = i==0
-			if i >= 0:
-				#print(C_hist.shape)
-				#print(C_h.shape)
-				C_hist = np.concatenate([C_hist,C_h[:-1]],axis=0)
-			i += 1
-	'''
-
-	mod.reset()
-
-	C_hist = C_hist[1:]
-
-	#plot_train([],C_hist,train_type="ESN")
-	C = np.mean(C_hist,axis=0)
-	#print_mat(mod.A)
-	#print_mat(mod.C)
-	print_mat(C)
-
-	#gt_A = -np.array([[0.1,0.5001,0.2],[-0.2,0.1,0.5001],[0.5001,0.2,-0.1]])
-	#print("Incremental, error: " + str(np.linalg.norm(gt_A-mod.A[:3,:3])))
-	#print("Averaging, error: " + str(np.linalg.norm(gt_A-A[:3,:3])))
-	
-	mod.set_Cw(C)
-
-	return mod
-
-
 def impending_failure(data,names,dataset,failure_horizon,style):
 	if dataset in ["TURBOFAN","ESN_SIM"]:
 		for dat in data:

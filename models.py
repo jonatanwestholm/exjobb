@@ -10,14 +10,6 @@ import matplotlib.pyplot as plt
 
 import models_auxilliary as mod_aux
 
-def is_tensor(X,order=2):
-	#print(X)
-	#print(np.shape(X))
-	if sum(np.array(np.shape(X)) > 1) == order:
-		return True
-	else:
-		return False
-
 class MTS_Model:
 	def __init__(self):
 		pass
@@ -67,7 +59,7 @@ class VARMA(MTS_Model):
 
 	def initiate_kalman(self,re,rw):
 		N = self.k*(self.p+self.q)
-		self.learners = [Kalman(N,re,rw) for i in range(self.k)]
+		self.learners = [mod_aux.Kalman(N,re,rw) for i in range(self.k)]
 
 	def initiate_rls(self,Y,lamb):
 		self.lamb = lamb
@@ -153,10 +145,10 @@ class VARMA(MTS_Model):
 		C_hist = np.zeros([1,self.k,self.k*self.q])
 		#print("tensor level: "+ str(0+(self.k>1)))
 		#print(Y)
-		if is_tensor(Y,0+(self.k>1)):
+		if mod_aux.is_tensor(Y,0+(self.k>1)):
 			self.learn_private(Y.T)				
 		else:
-			if is_tensor(Y,1):
+			if mod_aux.is_tensor(Y,1):
 				Y = self.make_column(Y)
 				#print(Y)
 			for y in Y:
@@ -217,29 +209,24 @@ class ESN(MTS_Model):
 		self.Oh = size_out
 		self.L = size_label
 		
-		self.reservoir = mod_aux.Reservoir(self.M,spec,mixing)
+		self.reservoir = mod_aux.Reservoir(self.M,spec,mixing,False)
 		self.A,self.B,self.f,self.idx_groups = self.reservoir.get_matrices()
-
-		self.A_array = self.A.toarray()
-		#print(self.A_array)
+		self.reservoir.print_reservoir()
+		#for row in self.A.toarray():
+		#	print(row)
+		#print(self.B)
 
 		self.N = self.reservoir.total_size()
 		
-		#self.B_array = self.B.toarray()
-
 		self.inputs = []
 		self.outputs = []
 
 		self.learners = None
-		self.first = 1
 
 		self.reset()
 
 	def reset(self):
 		self.X = np.zeros([self.N,1])
-
-	def initiate_kalman(self,re,rw):
-		self.learners = [Kalman(self.Oh,re,rw) for i in range(self.L)]
 
 	def activate(self,X):
 		Y = np.zeros_like(X)
@@ -273,7 +260,7 @@ class ESN(MTS_Model):
 		return X
 
 	def update(self,Y):
-		if is_tensor(Y,int(self.M > 1)):
+		if mod_aux.is_tensor(Y,int(self.M > 1)):
 			U = np.reshape(Y,[self.M,1])
 			self.X = self.update_private(U,self.X)
 		else:
@@ -283,139 +270,76 @@ class ESN(MTS_Model):
 
 		return self.X
 
-	def make_Cw(self):
-		Cw = np.zeros([self.L,self.Oh])
-		for i,learner in enumerate(self.learners):
-			Cw[i,:] = np.reshape(learner.X,[1,self.Oh])
+	def train_Cs(self,X):
+		__,S,V = np.linalg.svd(X,full_matrices=False)
+		
+		S_energy = np.cumsum(S)
+		S_energy = S_energy/S_energy[-1]
+		plt.plot(S_energy)
+		plt.show()
+		
+		self.Cs = V[:self.Oh,:]
+		#self.Cs = np.eye(self.Oh)
 
-		self.Cw = Cw
-		return Cw
-
-	def set_Cw(self,Cw):
-		self.Cw = Cw
-		if self.learners:
-			for i,learner in enumerate(self.learners):
-				learner.X = np.reshape(Cw[i,:],[self.Oh,1])
-
-	def learn_private(self,y,label=None):
-		Ys = np.dot(self.Cs,self.X)
-		Ys = np.reshape(Ys,[1,self.Oh])
-
-		if not label:
-			label = y
-
-		for learner,lab in zip(self.learners,label):
-			learner.update(lab,C=Ys)
-
-		#print("prediction: {0:.3f}, gt: {1:.3f}".format(self.predict(1)[0][0],y[0]))
-		self.update(y)
-
-		return self.make_Cw()
-
-	def learn(self,Y,labels=[]):
-		C_hist = np.zeros([1,self.L,self.Oh])
-
-		if not labels:
-			for y in Y:
-				C_h = self.learn_private(y)
-				C_hist = np.concatenate([C_hist,[C_h]],axis=0)				
-		else:
-			for y,label in zip(Y,labels):
-				C_h = self.learn_private(y,label)
-				C_hist = np.concatenate([C_hist,[C_h]],axis=0)
-
-		C_hist = C_hist[1:]
-
-		return C_hist
-
-	def learn_batch(self,Y,labels=[],tikho=0):
-		T = Y.shape[0]
-
-		X_vec = np.zeros([T,self.N])
-
-		for i,y in enumerate(Y[:-1]):
-			X = self.update(y)
-			X_vec[i,:] = np.ravel(X)
-
-		if labels == []:
-			X_vec = X_vec[:-1,:]
-			Y_vec = Y[1:,:]
-		else:
-			Y_vec = labels
-
-		if self.first:
-			U,S,V = np.linalg.svd(X_vec)
-			self.Cs = V[:self.Oh,:]
-			#print(self.Cs.shape)
-			#self.Cs = np.eye(self.Oh)
-			'''
-			S_energy = np.cumsum(S)
-			S_energy = S_energy/S_energy[-1]
-			plt.plot(S_energy)
-			plt.show()
-			'''
-			self.first = 0
-		else:
-			pass
-			'''
-			U,S,V = np.linalg.svd(X_vec)
-			U = U[:,:self.N]
-
-			U_auto1 = np.diag(np.dot(self.U.T,self.U))
-			U_auto2 = np.diag(np.dot(U.T,U))
-			U_cross = np.diag(np.dot(self.U.T,U))
-
-			U_rel = U_cross/np.sqrt(U_auto1*U_auto2)
-
-			plt.plot(U_rel)
-			plt.show()
-			'''
-
-		X_vec = np.dot(X_vec,self.Cs.T)
-
-		#print(X_vec)
-
-		XX = np.dot(X_vec.T,X_vec)
+	def train_Cw(self,Xs,Y,tikho):
+		XX = np.dot(Xs.T,Xs)
 		#print(XX.shape)
 		XX += np.eye(self.Oh)*tikho**2
 		#print(XX)
-		XY = np.dot(X_vec.T,Y_vec)
+		XY = np.dot(Xs.T,Y)
 		#print(XY)
-		self.Cw = np.linalg.lstsq(XX,XY)[0]
-		return np.reshape(self.Cw.T,[1]+list(self.Cw.T.shape))
+		self.Cw = np.linalg.lstsq(XX,XY)[0].T
+		#print(self.Cw)
+		#return np.reshape(self.Cw.T,[1]+list(self.Cw.T.shape))
 
-	def charge(self,X,y=[]):
-		self.inputs.append(X)
-		self.outputs.append(y)
+	def charge(self,U,y=[],burn_in=0):
+		self.reset()
+		U_burn_in = U[:burn_in]
+		U = U[burn_in:]
+		for u in U_burn_in:
+			self.update(u)
 
-	def train(self,burn_in,tikho):
-		C_hist = np.zeros([1,self.L,self.Oh])
+		T = U.shape[0]
+		X_vec = np.zeros([T,self.N])
 
-		for X,y in zip(self.inputs,self.outputs):
-			self.reset()
-			self.update(X[:burn_in,:])
+		for i,u in enumerate(U[:-1]):
+			X = self.update(u)
+			X_vec[i,:] = np.ravel(X)
 
-			C_h = self.learn_batch(X[burn_in:,:],y[burn_in:],tikho=tikho)
-			#print(C_h.shape)
-			#print(C_hist.shape)
-			C_hist = np.concatenate([C_hist,C_h],axis=0)
+		if y == []:
+			X_vec = X_vec[:-1,:]
+			Y_vec = U[1:,:]
+		else:
+			Y_vec = y
+
+		self.inputs.append(X_vec)
+		self.outputs.append(Y_vec)
+
+	def train(self,tikho):
+		X = np.concatenate(self.inputs,axis=0)
+		#print(X.shape)
+		Y = np.concatenate(self.outputs,axis=0)
+		#print(Y.shape)
+		#print(X[:5,:])
+		#print(X[-5:,:])
 		
-		C_hist = C_hist[1:]
-		C = np.mean(C_hist,axis=0)
-		#print_mat(C)
-		self.set_Cw(C)
+		self.train_Cs(X)
+		Xs = np.dot(X,self.Cs.T)
+		self.train_Cw(Xs,Y,tikho)
+
+		print(sorted(np.dot(self.Cw,self.Cs)[0]))
 
 	def out(self,X=[]):
 		if X == []:
 			X = self.X
-		Ys = np.dot(self.Cs,X)
+		Xs = np.dot(self.Cs,X)
 
-		return np.dot(self.Cw,Ys)
+		return np.dot(self.Cw,Xs)
 
 	def predict(self,k,U=[]):
 		if self.purpose == "CLASSIFICATION":
 			#U = np.zeros([self.M,1])
-			if is_tensor(U,self.M>1):
+			if mod_aux.is_tensor(U,self.M>1):
 				X = self.update_private(U,self.X,k-1,noise=False)
 				y = self.out(X)
 			else:
@@ -433,117 +357,6 @@ class ESN(MTS_Model):
 			y = self.out(X)
 
 		return y
-
-	def annealing(self,dat,re_series,rw_series,initiate=False):
-		C_hist = np.zeros([1,self.L,self.Oh])
-
-		step_length = int(len(dat)/len(re_series))
-		if initiate:
-			self.initiate_kalman(re_series[0],rw_series[0])
-		i = 0
-		for re,rw in zip(re_series,rw_series):
-			for learner in self.learners:
-				learner.set_variances(re,rw)
-			C_h = self.learn(dat[i*step_length:(i+1)*step_length])
-			#print(C_h.shape)
-			C_hist = np.concatenate([C_hist,C_h],axis=0)
-			i+=1
-
-		C_hist = C_hist[1:]
-
-		return C_hist
-
-	def print_esn_line(self,idx):
-		line = ""
-		line += " ".join(["{0:.0f}".format(elem).rjust(3,' ') for elem in self.B[idx,:]])
-		line += "    |"
-		line += " v {0:.2f}".format(self.A_array[(idx+1)%self.N,idx]).ljust(9,' ')
-		line += "| {0:.2f}".format(self.A_array[(idx-1)%self.N,idx]).ljust(9,' ') + "^"
-		line += "|    "
-		#out_node = np.where(self.Cs[:,idx] != 0)[0]
-		#if len(out_node):
-		#	out_node = out_node[0]
-		line += " ".join(["{0:.3f}".format(elem).rjust(8,' ') for elem in self.Cs[:,idx]])
-
-		return line
-
-	def print_esn(self):
-		esn_print = "\n".join([self.print_esn_line(idx) for idx in range(self.N)])
-		print(esn_print)
-
-# helps with learning
-# an object whose states is the weights of other models
-class Kalman:
-	def __init__(self,N,re,rw,A=[],C=[],X=[]):
-		if not A:
-			A = np.eye(N)
-		if not C:
-			C = np.zeros([1,N])
-		if not X:
-			#X = np.zeros([N,1])
-			X = np.random.normal(0,0.1,[N,1])
-		
-		self.N = N
-
-		self.A = A
-		self.C = C
-		self.X = X
-
-		self.Re = self.init_r(re,N)
-		self.Rw = self.init_r(rw,1)
-
-		self.Rxx = self.Re
-		self.Ryy = self.Rw
-
-	def init_r(self,r,N):
-		if is_tensor(r,0):
-			R = np.eye(N)*r
-		elif is_tensor(r,1):
-			R = np.diag(r)
-		elif is_tensor(r,2):
-			R = r
-		return R
-
-	def set_variances(self,re,rw):
-		self.Re = self.init_r(re,self.N)
-		self.Rw = self.init_r(rw,1)		
-
-	def update(self,y,C=[],A=[]):
-		if C == []:
-			C = self.C
-		if A == []:
-			A = self.A
-
-		# inference
-		#print(self.X)
-		K = np.dot(np.dot(self.Rxx,C.T),np.linalg.inv(self.Ryy))
-		self.X = self.X + np.dot(K,y-np.dot(C,self.X))
-		#print(K)
-		#print(y)
-
-		# update
-		eye = np.eye(self.N)
-		Rxx1 = np.dot(eye-np.dot(K,C),self.Rxx)
-		self.Rxx = np.dot(self.A,np.dot(Rxx1,self.A.T)) + self.Re
-		self.Ryy = (np.dot(self.C,np.dot(Rxx1,self.C.T)) + self.Rw).astype(dtype='float64')
-		
-		if np.linalg.norm(self.X) > 10:
-			self.X = np.zeros([self.N,1])
-			self.Rxx = self.Re
-			self.Ryy = self.Rw
-			print("reset X")
-			#print(self.X)
-			#print(self.Re)
-			#print(self.Rw)
-			#time.sleep(0.5)
-
-		#degeneration step
-		#self.X = 0.985*self.X
-
-		return self.X
-
-	def set_X(self,X):
-		self.X = X
 
 class SVM_TS:
 	def __init__(self,subgroup,pos_w,style):
