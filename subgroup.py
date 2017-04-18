@@ -164,10 +164,16 @@ def train(data,subgroup,train_type,args):
 		mod.subgroup = subgroup
 
 		if test_type == "PREDICTION":
-			for dat in data:
-				mod.charge(dat)
+			for i in range(args.settings["ESN_rebuild_iterations"]):
+				if i > 0:
+					mod.rebuild(args.settings["ESN_rebuild_types"],args.settings["ESN_impact_limit"])
+				if i == args.settings["ESN_rebuild_iterations"]-1:
+					mod.classifier = "MLP"
 
-			mod.train(tikho)
+				for dat in data:
+					mod.charge(dat)
+
+				mod.train(tikho)
 
 			mods = [mod]
 		elif test_type == "CLASSIFICATION":
@@ -179,13 +185,18 @@ def train(data,subgroup,train_type,args):
 		mod = Models.SVM_TS(subgroup,args.settings["pos_w"],args.settings["style"])
 
 	if args.test_type == "CLASSIFICATION":
-		for X,y in aux.impending_failure(data,args.train_names,args.dataset,args.settings["failure_horizon"],mod.style):
-			mod.charge(X,y)
+		for i in range(args.settings["ESN_rebuild_iterations"]):
+			if i > 0:
+				mod.rebuild(args.settings["ESN_rebuild_types"],args.settings["ESN_impact_limit"])
 
-		if train_type == "SVM":
-			mod.train()
-		elif train_type == "ESN":
-			mod.train(tikho)
+			for X,y in aux.impending_failure(data,args.train_names,args.dataset,args.settings["failure_horizon"],mod.style):
+				mod.charge(X,y)
+
+			if train_type == "SVM":
+				mod.train()
+			elif train_type == "ESN":
+				mod.train(tikho)
+
 
 		mods = [mod]
 
@@ -361,15 +372,16 @@ def settings(args):
 				#"ESN_size_state": 500, 
 				"ESN_spec": [("RODAN", {"N": 200}),
 							("VAR", {"p": 4}),
-							("THRES", {"N": 30,"random_thres":True}),
-							("TRIGGER", {"N": 40,"random_thres": True}),
+							#("THRES", {"N": 60,"random_thres":True}),
+							("TRIGGER", {"N": 80,"random_thres": True}),
 							("DIRECT",None),
-							("BIAS",None),
+							#("BIAS",None),
 							],
 				"ESN_size_out": 40, # ESN
 				"ESN_burn_in": 10,"ESN_batch_train" : True,"ESN_tikhonov_const": 3,  # ESN training
 				"ESN_sim_case": "random_trigger_waves", # ESN sim
-				"ESN_mixing": [("TRIGGER","RODAN",40),("THRES","RODAN",30)]
+				"ESN_mixing": [("TRIGGER","RODAN",80),("THRES","RODAN",30)],
+				"ESN_rebuild_types": ["THRES","TRIGGER"], "ESN_rebuild_iterations": 5, "ESN_impact_limit": 1e-2
 				}
 
 	args.settings = settings

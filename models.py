@@ -5,7 +5,7 @@ import numpy as np
 import copy
 import time
 import sklearn.svm as svm
-from sklearn.neural_network import MLPClassifier
+from sklearn.neural_network import MLPClassifier,MLPRegressor
 import matplotlib.pyplot as plt
 
 import models_auxilliary as mod_aux
@@ -222,6 +222,9 @@ class ESN(MTS_Model):
 		self.outputs = []
 
 		self.learners = None
+		self.classifier = "LINEAR"
+		self.sv = MLPRegressor(solver='lbfgs', alpha=1e-5,
+                    			hidden_layer_sizes=(10,3), random_state=1)
 
 		self.reset()
 
@@ -272,25 +275,32 @@ class ESN(MTS_Model):
 
 	def train_Cs(self,X):
 		__,S,V = np.linalg.svd(X,full_matrices=False)
-		
+		'''
 		S_energy = np.cumsum(S)
 		S_energy = S_energy/S_energy[-1]
 		plt.plot(S_energy)
 		plt.show()
-		
+		'''
 		self.Cs = V[:self.Oh,:]
 		#self.Cs = np.eye(self.Oh)
 
 	def train_Cw(self,Xs,Y,tikho):
-		XX = np.dot(Xs.T,Xs)
-		#print(XX.shape)
-		XX += np.eye(self.Oh)*tikho**2
-		#print(XX)
-		XY = np.dot(Xs.T,Y)
-		#print(XY)
-		self.Cw = np.linalg.lstsq(XX,XY)[0].T
-		#print(self.Cw)
-		#return np.reshape(self.Cw.T,[1]+list(self.Cw.T.shape))
+		if self.classifier == "LINEAR":
+			Xs = np.concatenate([np.ones([Xs.shape[0],1]),Xs],axis=1)
+			XX = np.dot(Xs.T,Xs)
+			#print(XX.shape)
+			XX += np.eye(self.Oh+1)*tikho**2
+			#print(XX)
+			XY = np.dot(Xs.T,Y)
+			#print(XY)
+			self.Cw = np.linalg.lstsq(XX,XY)[0].T
+
+			#print(self.Cw)
+			#return np.reshape(self.Cw.T,[1]+list(self.Cw.T.shape))
+
+		elif self.classifier == "MLP":
+			self.sv.fit(Xs,np.ravel(Y))
+
 
 	def charge(self,U,y=[],burn_in=0):
 		self.reset()
@@ -322,19 +332,42 @@ class ESN(MTS_Model):
 		#print(Y.shape)
 		#print(X[:5,:])
 		#print(X[-5:,:])
+		#x = np.log(X-np.min(X)+0.1)
+		#x = np.ravel(x)
 		
+		x = copy.deepcopy(X)
+		print("min: {0:.3f}, max: {1:.1f}, mean: {2:.1f}, std: {3:.3f}".format(np.min(x),np.max(x),np.mean(x),np.std(x)))
+		for i in range(x.shape[0]):
+			for j in range(x.shape[1]):
+				if x[i,j] < -2 or x[i,j] > 2:
+					x[i,j] = 0		
+
 		self.train_Cs(X)
 		Xs = np.dot(X,self.Cs.T)
 		self.train_Cw(Xs,Y,tikho)
 
-		print(sorted(np.dot(self.Cw,self.Cs)[0]))
+		#print(sorted([0]))
+		if self.classifier == "LINEAR":
+			node_impact = np.dot(self.Cw[:,1:],self.Cs)
+			#print(node_impact.shape)
+			#print(np.max(np.abs(X),axis=0).shape)
+			self.node_max_impact = np.abs(node_impact*np.max(np.abs(X),axis=0).T)
+
+		#plt.imshow(x.T,interpolation='none')
+		#plt.hist(np.ravel(X),1000)
+		#plt.show()		
 
 	def out(self,X=[]):
 		if X == []:
 			X = self.X
 		Xs = np.dot(self.Cs,X)
+		if self.classifier == "LINEAR":
+			Xs = np.concatenate([np.array([[1]]),Xs])
+			y = np.dot(self.Cw,Xs)
+		elif self.classifier == "MLP":
+			y = self.sv.predict(Xs.T)
 
-		return np.dot(self.Cw,Xs)
+		return y
 
 	def predict(self,k,U=[]):
 		if self.purpose == "CLASSIFICATION":
@@ -357,6 +390,14 @@ class ESN(MTS_Model):
 			y = self.out(X)
 
 		return y
+
+	def rebuild(self,comp_types,impact_threshold):
+		passes_threshold = (self.node_max_impact > impact_threshold)[0]
+		self.A,self.B,self.f,self.idx_groups = self.reservoir.rebuild(comp_types,passes_threshold)
+
+		self.inputs = []
+		self.outputs = []
+		self.reset()
 
 class SVM_TS:
 	def __init__(self,subgroup,pos_w,style):

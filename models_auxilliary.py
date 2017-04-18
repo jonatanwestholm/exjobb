@@ -194,8 +194,8 @@ class Node:
 		self.inputs = []
 		self.outputs = []
 
-	def set_external_inputs(self,external_inputs):
-		self.external_inputs = external_inputs
+	#def set_external_input(self,external,weight):
+	#	self.external_inputs.append((external,weight))
 
 	def set_input(self,other,weight):
 		self.inputs.append((other,weight))
@@ -258,6 +258,7 @@ class Component:
 
 		return nodes
 
+'''
 class BIAS(Component):
 	def __init__(self,M):
 		super(BIAS,self).__init__(1)
@@ -266,13 +267,20 @@ class BIAS(Component):
 		self.A = ESN_A("DLR",1,r=0)
 		self.B = ESN_B("SINGLE",M,1,v=0)
 		self.f = [lambda x: 1]
+'''
 
 class VAR(Component):
 	def __init__(self,M,p):
 		p = p + 1 # to agree with common notation
 		super(VAR,self).__init__(M*p)
 		self.common_f = True
+		self.M = M
+		self.p = p
+		self.build()
 
+	def build(self):
+		M = self.M
+		p = self.p 
 		self.A = [ESN_A("DLR",p,r=1) for i in range(M)]
 		self.A = sparse.block_diag(self.A)
 		self.A = self.A.tocsr()
@@ -284,7 +292,11 @@ class DIRECT(Component):
 	def __init__(self,M):
 		super(DIRECT,self).__init__(M)
 		self.common_f = True
+		self.M = M
+		self.build()
 
+	def build(self):
+		M = self.M
 		self.A = ESN_A("DLR",self.N,r=0)
 		self.B = ESN_B("DIRECT",self.N,self.N)
 		self.f = [ESN_f("LIN")]
@@ -293,7 +305,13 @@ class RODAN(Component):
 	def __init__(self,M,N):
 		super(RODAN,self).__init__(N)
 		self.common_f = True
+		self.M = M
+		self.N_init = N
+		self.build()
 
+	def build(self):
+		M = self.M
+		N = self.N_init
 		self.A = ESN_A("DLR",self.N,r=0.5)
 		self.B = ESN_B("SECTIONS",M,N)
 		self.f = [ESN_f("TANH")]
@@ -305,7 +323,17 @@ class THRES(Component):
 	def __init__(self,M,N=1,direct_input=True,random_thres=False,turn_on=True):
 		super(THRES,self).__init__(2)
 		self.common_f = False
+		self.M = M
+		self.direct_input = direct_input
+		self.random_thres = random_thres
+		self.turn_on = turn_on
+		self.build()
 
+	def build(self):
+		M = self.M
+		direct_input = self.direct_input
+		random_thres = self.random_thres
+		turn_on = self.turn_on
 		self.A,self.B,self.f = make_thres(M,direct_input,random_thres,turn_on)
 
 	def build_nodes(self,input_idx):
@@ -316,7 +344,17 @@ class TRIGGER(Component):
 	def __init__(self,M,N=1,direct_input=True,random_thres=False,turn_on=True):
 		super(TRIGGER,self).__init__(3)
 		self.common_f = False
+		self.M = M
+		self.direct_input = direct_input
+		self.random_thres = random_thres
+		self.turn_on = turn_on
+		self.build()
 
+	def build(self):
+		M = self.M
+		direct_input = self.direct_input
+		random_thres = self.random_thres
+		turn_on = self.turn_on
 		self.A,self.B,self.f = make_trigger(M,direct_input,random_thres,turn_on)
 
 	def build_nodes(self,input_idx):
@@ -340,7 +378,6 @@ components = {"AR": ["FLEX","DLR",1,"SECTIONS_INIT",1,"LIN"],
 
 # transfers = [("SOURCE","TARGET",number), ...]
 # archs = [(row,column), ...]
-
 
 class Reservoir:
 	def __init__(self,M,spec,mixing_spec,replace):
@@ -436,7 +473,21 @@ class Reservoir:
 					A[start+i,start+j] = comp.A[i,j]
 
 		A = A.tocsr()
-		return A		
+		return A
+
+	def rebuild(self,comp_types,passes_threshold):
+		total_rebuilt = 0
+		for comp in self.components:
+			if comp.get_typename() in comp_types:
+				start = comp.input_idx
+				end = comp.get_output_idx()+1
+				#print(passes_threshold[start:end])
+				if not np.any(passes_threshold[start:end]):
+					comp.build()
+					total_rebuilt += 1
+
+		print("Rebuilt {0:d} components".format(total_rebuilt))
+		return self.get_matrices()
 
 	def print_reservoir(self):
 		for comp in self.components:
