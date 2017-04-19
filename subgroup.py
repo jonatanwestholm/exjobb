@@ -154,13 +154,14 @@ def train(data,subgroup,train_type,args):
 		#batch_train = args.settings["ESN_batch_train"]
 		tikho = args.settings["ESN_tikhonov_const"]
 		purpose = args.test_type
+		pos_w = args.settings["pos_w"]
 
 		if test_type == "PREDICTION":
 			orders = [N,size_out,N]
 		elif test_type == "CLASSIFICATION":
 			orders = [N,size_out,1]
 
-		mod = Models.ESN(purpose,orders,spec,mixing)
+		mod = Models.ESN(purpose,orders,spec,mixing,pos_w)
 		mod.subgroup = subgroup
 
 		if test_type == "PREDICTION":
@@ -168,7 +169,7 @@ def train(data,subgroup,train_type,args):
 				if i > 0:
 					mod.rebuild(args.settings["ESN_rebuild_types"],args.settings["ESN_impact_limit"])
 				if i == args.settings["ESN_rebuild_iterations"]-1:
-					mod.classifier = "MLP"
+					pass #mod.classifier = "MLP"
 
 				for dat in data:
 					mod.charge(dat)
@@ -311,7 +312,19 @@ def evaluate(pred,gt,evaluate_on,args):
 			j+=1
 
 	elif test_type == "CLASSIFICATION":
-		rmses = [1]
+		for pred_mat,gt_mat in zip(pred,gt):
+			diff = pred_mat-gt_mat 
+			diff[gt_mat==1] = diff[gt_mat==1]*args.settings["pos_w"]
+			fro = np.linalg.norm(diff)
+			rms = fro/np.sqrt(np.size(pred_mat))
+			if args.test_names:
+				print("Unit {1:s}, weighted error: {0:.3f}".format(rms,args.test_names[j]))
+			else:
+				print("Fig {1:d}, weighted error: {0:.3f}".format(rms,j))
+			rmses.append(rms)
+
+			j += 1
+			
 		aux.classification_plot(pred,gt,args.settings["style"],args.settings["failure_horizon"])
 		
 	rmses = np.array(rmses)
@@ -366,22 +379,22 @@ def settings(args):
 				"VARMA_p": 2, "VARMA_q": 0, "ARMA_q": 2, # VARMA orders
 				"re_series": np.logspace(-1,-6,num_series), "rw_series": 500*np.logspace(0,-1,num_series), # VARMA training
 				"num_timepoints": 1000, "num_samples": 50, "case": "case1", # VARMA sim
-				"train_share": 0.1, "test_share": 0.1, # splitting
-				"failure_horizon": 20, "pos_w": 10, "style": "MLP", # SVM 
+				"train_share": 0.4, "test_share": 0.3, # splitting
+				"failure_horizon": 20, "pos_w": 5, "style": "MLP", # SVM 
 				#"A_architecture": "DLR", "B_architecture": "SECTIONS", "C_architecture": "SELECTED", "f_architecture": "TANH", # ESN
 				#"ESN_size_state": 500, 
 				"ESN_spec": [("RODAN", {"N": 200}),
 							("VAR", {"p": 4}),
-							#("THRES", {"N": 60,"random_thres":True}),
+							("THRES", {"N": 60,"random_thres":True}),
 							("TRIGGER", {"N": 80,"random_thres": True}),
 							("DIRECT",None),
 							#("BIAS",None),
 							],
-				"ESN_size_out": 40, # ESN
+				"ESN_size_out": 60, # ESN
 				"ESN_burn_in": 10,"ESN_batch_train" : True,"ESN_tikhonov_const": 3,  # ESN training
 				"ESN_sim_case": "random_trigger_waves", # ESN sim
 				"ESN_mixing": [("TRIGGER","RODAN",80),("THRES","RODAN",30)],
-				"ESN_rebuild_types": ["THRES","TRIGGER"], "ESN_rebuild_iterations": 5, "ESN_impact_limit": 1e-2
+				"ESN_rebuild_types": ["THRES","TRIGGER"], "ESN_rebuild_iterations": 1, "ESN_impact_limit": 1e-2
 				}
 
 	args.settings = settings

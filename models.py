@@ -4,6 +4,7 @@
 import numpy as np
 import copy
 import time
+from scipy import sparse
 import sklearn.svm as svm
 from sklearn.neural_network import MLPClassifier,MLPRegressor
 import matplotlib.pyplot as plt
@@ -202,8 +203,9 @@ class VARMA(MTS_Model):
 
 class ESN(MTS_Model):
 
-	def __init__(self,purpose,orders,spec,mixing):
+	def __init__(self,purpose,orders,spec,mixing,pos_w=1):
 		self.purpose = purpose
+		self.pos_w = pos_w
 		size_in,size_out,size_label = orders
 		self.M = size_in
 		self.Oh = size_out
@@ -218,8 +220,10 @@ class ESN(MTS_Model):
 
 		self.N = self.reservoir.total_size()
 		
+		self.external_inputs = []
 		self.inputs = []
 		self.outputs = []
+		self.weights = []
 
 		self.learners = None
 		self.classifier = "LINEAR"
@@ -279,6 +283,9 @@ class ESN(MTS_Model):
 		S_energy = np.cumsum(S)
 		S_energy = S_energy/S_energy[-1]
 		plt.plot(S_energy)
+		plt.title("Cumulative singular values")
+		plt.xlabel("Singular value")
+		plt.ylabel("Cumulative relative singular values")
 		plt.show()
 		'''
 		self.Cs = V[:self.Oh,:]
@@ -287,6 +294,12 @@ class ESN(MTS_Model):
 	def train_Cw(self,Xs,Y,tikho):
 		if self.classifier == "LINEAR":
 			Xs = np.concatenate([np.ones([Xs.shape[0],1]),Xs],axis=1)
+			if self.weights != []:
+				W = np.concatenate(self.weights)
+				F = sparse.diags(np.ravel(W))
+				Xs = F*Xs
+				Y = F*Y
+
 			XX = np.dot(Xs.T,Xs)
 			#print(XX.shape)
 			XX += np.eye(self.Oh+1)*tikho**2
@@ -321,7 +334,12 @@ class ESN(MTS_Model):
 			Y_vec = U[1:,:]
 		else:
 			Y_vec = y
+			W_vec = np.ones_like(Y_vec)
+			W_vec[Y_vec==1] = self.pos_w
+			self.weights.append(W_vec)
 
+		U[-1,:] = None
+		self.external_inputs.append(U)
 		self.inputs.append(X_vec)
 		self.outputs.append(Y_vec)
 
@@ -348,14 +366,35 @@ class ESN(MTS_Model):
 
 		#print(sorted([0]))
 		if self.classifier == "LINEAR":
-			node_impact = np.dot(self.Cw[:,1:],self.Cs)
+			#node_impact = np.std(X,axis=0)
+			#print(node_impact)
+			#self.node_max_impact = node_impact
 			#print(node_impact.shape)
 			#print(np.max(np.abs(X),axis=0).shape)
+			node_impact = np.dot(self.Cw[:,1:],self.Cs)
 			self.node_max_impact = np.abs(node_impact*np.max(np.abs(X),axis=0).T)
 
-		#plt.imshow(x.T,interpolation='none')
-		#plt.hist(np.ravel(X),1000)
-		#plt.show()		
+		#self.plot_activations()
+		
+	def plot_activations(self):
+		X = np.concatenate(self.inputs,axis=0)
+		U = np.concatenate(self.external_inputs,axis=0)
+		#print("min: {0:.3f}, max: {1:.1f}, mean: {2:.1f}, std: {3:.3f}".format(np.min(X),np.max(X),np.mean(X),np.std(X)))
+		for i in range(X.shape[0]):
+			for j in range(X.shape[1]):
+				if X[i,j] < -2 or X[i,j] > 2:
+					X[i,j] = 0
+
+		f,axarr = plt.subplots(self.M+1,sharex = True)
+		axarr[0].imshow(X.T,interpolation='none')
+		#axarr[0].title("Node activations")
+		for i in range(1,self.M+1):
+			u = U[:,i-1]
+			none_idx = np.where(np.isnan(u))[0]
+			axarr[i].plot(U[:,i-1])
+			axarr[i].scatter(none_idx,[0]*len(none_idx),color='r',marker='*')
+
+		plt.show()		
 
 	def out(self,X=[]):
 		if X == []:
@@ -395,8 +434,10 @@ class ESN(MTS_Model):
 		passes_threshold = (self.node_max_impact > impact_threshold)[0]
 		self.A,self.B,self.f,self.idx_groups = self.reservoir.rebuild(comp_types,passes_threshold)
 
+		self.external_inputs = []
 		self.inputs = []
 		self.outputs = []
+		self.weights = []
 		self.reset()
 
 class SVM_TS:
