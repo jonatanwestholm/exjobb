@@ -278,7 +278,7 @@ def impending_failure_datapoints(dat,failure,failure_horizon,style):
 		if style == "SVC":
 			y = np.concatenate([-np.ones([N-failure_horizon,1]), np.ones([failure_horizon,1])])
 		elif style == "MLP":
-			multiplier = 5 #int(N/failure_horizon)
+			multiplier = 1 #int(N/failure_horizon)
 
 			neg_X = dat[:-failure_horizon,:]
 			pos_X = dat[-failure_horizon:,:]

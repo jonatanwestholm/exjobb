@@ -6,7 +6,7 @@ from scipy import sparse
 
 esn_component_sizes = {"VAR":1,"RODAN":1,"DIRECT":1,"THRES":2,"TRIGGER":3}
 
-THRES_HIGH = 1000
+THRES_HIGH = 100000
 
 
 # turns list of lists into list
@@ -20,6 +20,57 @@ def is_tensor(X,order=2):
 		return True
 	else:
 		return False
+
+def significant_nodes(X,Y):
+	Y = Y-np.min(Y)
+	Y = Y/np.max(Y)
+	sig = []
+	for feat in X.T:
+		pos = feat[np.where(Y==1)[0]]
+		neg = feat[np.where(Y==0)[0]]
+
+		sig.append(significance_test(pos,neg))
+
+	return np.array(sig)
+
+def significance_test(x1,x2):
+	mean1 = np.mean(x1)
+	mean2 = np.mean(x2)
+
+	std1 = np.std(x1)
+	std2 = np.std(x2)
+
+	return overlap([mean1-2*std1,mean1+2*std1],[mean2-2*std2,mean2+2*std2])
+
+def overlap(int1,int2):
+	#print(int1)
+	#print(int2)
+
+	if int1[0] > int2[0]:
+		tmp = int1
+		int1 = int2
+		int2 = tmp
+
+	#print(int1)
+	#print(int2)
+
+	assert(int1[0] <= int2[0])
+
+	if int1[1] > int2[1]:
+		return 1
+
+	if int1[1] < int2[0]:
+		return 0
+
+	ltot = int2[1]-int1[0]
+
+	if l1 == 0 and l2 == 0:
+		return 1
+
+	common = int1[1]-int2[0]
+
+	return common**2/(l1*l2)
+
 
 def ESN_A(architecture,N,r=0.5,b=0.05):
 
@@ -302,18 +353,20 @@ class DIRECT(Component):
 		self.f = [ESN_f("LIN")]
 
 class RODAN(Component):
-	def __init__(self,M,N):
+	def __init__(self,M,N,r=0.5,v=1):
 		super(RODAN,self).__init__(N)
 		self.common_f = True
 		self.M = M
 		self.N_init = N
+		self.r = r 
+		self.v = v
 		self.build()
 
 	def build(self):
 		M = self.M
 		N = self.N_init
-		self.A = ESN_A("DLR",self.N,r=0.5)
-		self.B = ESN_B("SECTIONS",M,N)
+		self.A = ESN_A("DLR",self.N,r=self.r)
+		self.B = ESN_B("SECTIONS",M,N,v=self.v)
 		self.f = [ESN_f("TANH")]
 
 	def get_input_idx(self):

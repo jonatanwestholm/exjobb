@@ -155,13 +155,14 @@ def train(data,subgroup,train_type,args):
 		tikho = args.settings["ESN_tikhonov_const"]
 		purpose = args.test_type
 		pos_w = args.settings["pos_w"]
+		classifier = args.settings["ESN_classifier"]
 
 		if test_type == "PREDICTION":
 			orders = [N,size_out,N]
 		elif test_type == "CLASSIFICATION":
 			orders = [N,size_out,1]
 
-		mod = Models.ESN(purpose,orders,spec,mixing,pos_w)
+		mod = Models.ESN(purpose,orders,spec,mixing,pos_w,args.settings["ESN_sig_limit"],args.settings["ESN_classifier"],args.explanations)
 		mod.subgroup = subgroup
 
 		if test_type == "PREDICTION":
@@ -325,7 +326,8 @@ def evaluate(pred,gt,evaluate_on,args):
 
 			j += 1
 			
-		aux.classification_plot(pred,gt,args.settings["style"],args.settings["failure_horizon"])
+		if args.plot:
+			aux.classification_plot(pred,gt,args.settings["style"],args.settings["failure_horizon"])
 		
 	rmses = np.array(rmses)
 	print("Avg: {0:.3f}, Min: {1:.3f}, Max: {2:.3f}".format(np.mean(rmses),np.min(rmses),np.max(rmses)))
@@ -379,28 +381,34 @@ def settings(args):
 				"VARMA_p": 2, "VARMA_q": 0, "ARMA_q": 2, # VARMA orders
 				"re_series": np.logspace(-1,-6,num_series), "rw_series": 500*np.logspace(0,-1,num_series), # VARMA training
 				"num_timepoints": 1000, "num_samples": 50, "case": "case1", # VARMA sim
-				"train_share": 0.4, "test_share": 0.3, # splitting
-				"failure_horizon": 20, "pos_w": 5, "style": "MLP", # SVM 
+				"train_share": 0.1, "test_share": 0.1, # splitting
+				"failure_horizon": 20, "pos_w": 3, "style": "MLP", # SVM 
 				#"A_architecture": "DLR", "B_architecture": "SECTIONS", "C_architecture": "SELECTED", "f_architecture": "TANH", # ESN
 				#"ESN_size_state": 500, 
-				"ESN_spec": [("RODAN", {"N": 200}),
-							("VAR", {"p": 4}),
-							("THRES", {"N": 60,"random_thres":True}),
-							("TRIGGER", {"N": 80,"random_thres": True}),
+				"ESN_spec": [("RODAN", {"N": 500,"v":0}),
+							("RODAN",{"N":200,"v":1}),
+							("VAR", {"p": 10}),
+							("THRES", {"N": 200,"random_thres":True}),
+							("TRIGGER", {"N": 400,"random_thres": True}),
 							("DIRECT",None),
 							#("BIAS",None),
 							],
 				"ESN_size_out": 60, # ESN
 				"ESN_burn_in": 10,"ESN_batch_train" : True,"ESN_tikhonov_const": 3,  # ESN training
 				"ESN_sim_case": "random_trigger_waves", # ESN sim
-				"ESN_mixing": [("TRIGGER","RODAN",80),("THRES","RODAN",30)],
-				"ESN_rebuild_types": ["THRES","TRIGGER"], "ESN_rebuild_iterations": 1, "ESN_impact_limit": 1e-2
+				"ESN_mixing": [("TRIGGER","RODAN",250),("THRES","RODAN",100),("RODAN","TRIGGER",1),("RODAN","THRES",100),("THRES","VAR",40),("VAR","TRIGGER",1)],
+				"ESN_rebuild_types": ["THRES","TRIGGER"], "ESN_rebuild_iterations": 1, "ESN_impact_limit": 1e-2,
+				"ESN_classifier": "LINEAR","ESN_sig_limit": 0.95
 				}
 
 	args.settings = settings
 
 def subgroup(data,args):
 	train_data,test_data,train_names,test_names = pp.split(data,args.split_method,train_share=args.settings["train_share"],test_share=args.settings["test_share"],names=args.names,return_names=True)
+	
+	#test_data = train_data
+	#test_names = train_names
+
 	args.train_names = train_names
 	args.test_names = test_names
 	print(len(train_data))

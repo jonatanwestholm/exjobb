@@ -203,9 +203,12 @@ class VARMA(MTS_Model):
 
 class ESN(MTS_Model):
 
-	def __init__(self,purpose,orders,spec,mixing,pos_w=1):
+	def __init__(self,purpose,orders,spec,mixing,pos_w,sig_limit,classifier,explanations):
 		self.purpose = purpose
 		self.pos_w = pos_w
+		self.sig_limit = sig_limit
+		self.classifier = classifier
+		self.explanations = explanations
 		size_in,size_out,size_label = orders
 		self.M = size_in
 		self.Oh = size_out
@@ -213,7 +216,7 @@ class ESN(MTS_Model):
 		
 		self.reservoir = mod_aux.Reservoir(self.M,spec,mixing,False)
 		self.A,self.B,self.f,self.idx_groups = self.reservoir.get_matrices()
-		self.reservoir.print_reservoir()
+		#self.reservoir.print_reservoir()
 		#for row in self.A.toarray():
 		#	print(row)
 		#print(self.B)
@@ -226,9 +229,11 @@ class ESN(MTS_Model):
 		self.weights = []
 
 		self.learners = None
-		self.classifier = "LINEAR"
-		self.sv = MLPRegressor(solver='lbfgs', alpha=1e-5,
+		if self.classifier == "MLP":
+			self.sv = MLPRegressor(solver='lbfgs', alpha=1e-5,
                     			hidden_layer_sizes=(10,3), random_state=1)
+		elif self.classifier == "SVM":
+			self.sv = svm.SVR()			
 
 		self.reset()
 
@@ -291,7 +296,7 @@ class ESN(MTS_Model):
 		self.Cs = V[:self.Oh,:]
 		#self.Cs = np.eye(self.Oh)
 
-	def train_Cw(self,Xs,Y,tikho):
+	def train_Cw(self,Xs,Y,W=[],tikho=0):
 		if self.classifier == "LINEAR":
 			Xs = np.concatenate([np.ones([Xs.shape[0],1]),Xs],axis=1)
 			if self.weights != []:
@@ -313,7 +318,9 @@ class ESN(MTS_Model):
 
 		elif self.classifier == "MLP":
 			self.sv.fit(Xs,np.ravel(Y))
+		elif self.classifier == "SVM":
 
+			self.sv.fit(Xs,np.ravel(Y),)
 
 	def charge(self,U,y=[],burn_in=0):
 		self.reset()
@@ -347,6 +354,15 @@ class ESN(MTS_Model):
 		X = np.concatenate(self.inputs,axis=0)
 		#print(X.shape)
 		Y = np.concatenate(self.outputs,axis=0)
+
+
+		sig = mod_aux.significant_nodes(X,Y)
+		self.sig_nodes = np.where(sig < self.sig_limit)[0]
+		print(sig[self.sig_nodes])
+		X = X[:,self.sig_nodes]
+		if len(self.sig_nodes) < self.Oh:
+			self.Oh = len(self.sig_nodes)
+		print("{0:d} significant nodes".format(len(self.sig_nodes)))
 		#print(Y.shape)
 		#print(X[:5,:])
 		#print(X[-5:,:])
@@ -362,10 +378,10 @@ class ESN(MTS_Model):
 
 		self.train_Cs(X)
 		Xs = np.dot(X,self.Cs.T)
-		self.train_Cw(Xs,Y,tikho)
 
 		#print(sorted([0]))
 		if self.classifier == "LINEAR":
+			self.train_Cw(Xs,Y,tikho=tikho)
 			#node_impact = np.std(X,axis=0)
 			#print(node_impact)
 			#self.node_max_impact = node_impact
@@ -373,6 +389,11 @@ class ESN(MTS_Model):
 			#print(np.max(np.abs(X),axis=0).shape)
 			node_impact = np.dot(self.Cw[:,1:],self.Cs)
 			self.node_max_impact = np.abs(node_impact*np.max(np.abs(X),axis=0).T)
+		elif self.classifier == "MLP":
+			self.train_Cw(Xs,Y)
+		elif self.classifier == "SVM":
+			W = np.concatenate(self.weights,axis=0)
+			self.train_Cw(Xs,Y,W=W)
 
 		#self.plot_activations()
 		
@@ -385,25 +406,28 @@ class ESN(MTS_Model):
 				if X[i,j] < -2 or X[i,j] > 2:
 					X[i,j] = 0
 
-		f,axarr = plt.subplots(self.M+1,sharex = True)
+		f,axarr = plt.subplots(2,sharex = True)
 		axarr[0].imshow(X.T,interpolation='none')
 		#axarr[0].title("Node activations")
-		for i in range(1,self.M+1):
-			u = U[:,i-1]
+		for i in range(self.M):
+			u = U[:,i]
 			none_idx = np.where(np.isnan(u))[0]
-			axarr[i].plot(U[:,i-1])
-			axarr[i].scatter(none_idx,[0]*len(none_idx),color='r',marker='*')
+			axarr[1].plot(U[:,i])
+		
+		axarr[1].scatter(none_idx,[0]*len(none_idx),color='r',marker='*',s=20)
+		axarr[1].legend(self.explanations,loc="upper left",bbox_to_anchor=(1,1))
 
 		plt.show()		
 
 	def out(self,X=[]):
 		if X == []:
 			X = self.X
+		X = X[self.sig_nodes]
 		Xs = np.dot(self.Cs,X)
 		if self.classifier == "LINEAR":
 			Xs = np.concatenate([np.array([[1]]),Xs])
 			y = np.dot(self.Cw,Xs)
-		elif self.classifier == "MLP":
+		elif self.classifier in ["MLP","SVM"]:
 			y = self.sv.predict(Xs.T)
 
 		return y
