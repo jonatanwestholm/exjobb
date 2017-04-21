@@ -3,6 +3,7 @@
 
 import numpy as np
 from scipy import sparse
+import matplotlib.pyplot as plt
 
 esn_component_sizes = {"VAR":1,"RODAN":1,"DIRECT":1,"THRES":2,"TRIGGER":3}
 
@@ -31,7 +32,9 @@ def significant_nodes(X,Y):
 
 		sig.append(significance_test(pos,neg))
 
-	return np.array(sig)
+	sig = np.array(sig)
+	#print(sig)
+	return sig
 
 def significance_test(x1,x2):
 	mean1 = np.mean(x1)
@@ -54,7 +57,10 @@ def overlap(int1,int2):
 	#print(int1)
 	#print(int2)
 
-	assert(int1[0] <= int2[0])
+	if int1[0] > int2[0]:
+		print(int1)
+		print(int2)
+		raise
 
 	if int1[1] > int2[1]:
 		return 1
@@ -64,12 +70,12 @@ def overlap(int1,int2):
 
 	ltot = int2[1]-int1[0]
 
-	if l1 == 0 and l2 == 0:
+	if ltot == 0:
 		return 1
 
 	common = int1[1]-int2[0]
 
-	return common**2/(l1*l2)
+	return common/ltot
 
 
 def ESN_A(architecture,N,r=0.5,b=0.05):
@@ -98,6 +104,11 @@ def ESN_A(architecture,N,r=0.5,b=0.05):
 		arr = r*np.ravel(arr[:-1])
 
 		A = sparse.diags([arr,[r]],[-1,N-1])
+	elif architecture == "DIAGONAL":
+		arr = np.ones([N,1])
+		arr = r*np.ravel(arr)
+
+		A = sparse.diags([arr],[0])
 	'''
 	elif architecture == "DIRECT":
 		arr = np.ones([N,])
@@ -187,8 +198,12 @@ def ESN_f(architecture,thres=0):
 		f = lambda x: np.tanh(x)
 	elif architecture == "POSLIN":
 		f = lambda x: (x>thres)*(x-thres)
+	elif architecture == "DOUBLE_POSLIN":
+		f = lambda x: (np.abs(x)>thres)*x + (np.abs(x)<=thres)*thres
 	elif architecture == "THRES":
 		f = lambda x: x>thres
+	elif architecture == "INVERSE_DECAY":
+		f = lambda x: x - thres**2/x
 
 	return f
 
@@ -196,8 +211,7 @@ def make_thres(M, direct_input, random_thres, turn_on):
 	if direct_input:
 		B = ESN_B("SELECTED",M,2,replace=False)
 	else:
-		B = ESN_B("SELECTED",M,2)
-		B[0,:] = 0
+		B = ESN_B("SELECTED",M,2,v=0)
 
 	A = sparse.diags([THRES_HIGH],[-1])
 
@@ -309,17 +323,6 @@ class Component:
 
 		return nodes
 
-'''
-class BIAS(Component):
-	def __init__(self,M):
-		super(BIAS,self).__init__(1)
-		self.common_f = True
-
-		self.A = ESN_A("DLR",1,r=0)
-		self.B = ESN_B("SINGLE",M,1,v=0)
-		self.f = [lambda x: 1]
-'''
-
 class VAR(Component):
 	def __init__(self,M,p):
 		p = p + 1 # to agree with common notation
@@ -350,6 +353,19 @@ class DIRECT(Component):
 		M = self.M
 		self.A = ESN_A("DLR",self.N,r=0)
 		self.B = ESN_B("DIRECT",self.N,self.N)
+		self.f = [ESN_f("LIN")]
+
+class LEAKY(Component):
+	def __init__(self,M,N,r):
+		super(LEAKY,self).__init__(N)
+		self.common_f = True
+		self.M = M
+		self.r = r
+		self.build()
+
+	def build(self):
+		self.A = ESN_A("DIAGONAL",self.N,self.r)
+		self.B = ESN_B("SECTIONS",self.M,self.N)
 		self.f = [ESN_f("LIN")]
 
 class RODAN(Component):
@@ -414,15 +430,24 @@ class TRIGGER(Component):
 		self.set_input_idx(input_idx)
 		self.nodes = [Node(self.input_idx,self.get_output_idx())]
 
-'''
-components = {"AR": ["FLEX","DLR",1,"SECTIONS_INIT",1,"LIN"],
-			  "RODAN": ["FLEX","DLR",0.5,"SECTIONS",1,"TANH"],
-			  "DIRECT": ["FLEX","DLR",0,"DIRECT",1,"LIN"],
-			  "THRES": ["THRES"],
-			  "TRIGGER": ["TRIGGER"],
-			  "HEIGHTSENS": ["HEIGHTSENS"],
-			  "ANOM": ["ANOM"]}
-'''
+class HEIGHTSENS(Component):
+	def __init__(self,M,N,random_thres):
+		super(HEIGHTSENS,self).__init__(N)
+		self.common_f = True
+		self.M = M
+		if random_thres:
+			self.r = 1*np.random.random([N,1])
+		else:
+			self.r = 1
+		self.build()
+
+	def build(self):
+		self.A = ESN_A("DIAGONAL",self.N,r=1)
+		self.B = ESN_B("SECTIONS",self.M,self.N)
+		#g = ESN_f("INVERSE_DECAY",self.r)
+		#h = ESN_f("DOUBLE_POSLIN",self.r)
+		#self.f = [lambda x: g(h(x))]
+		self.f = [ESN_f("TANH")]
 
 # example:
 # spec = {"DIRECT": None,"VAR": {"p": 5}, "RODAN": {"N": 200}, "THRES": {"random_thres": True, "N": 20}}
@@ -458,18 +483,22 @@ class Reservoir:
 
 		for key,comp_spec in spec:
 			#key,comp_spec = spec
-			if key == "BIAS":
-				comp = [BIAS(M)]
-			elif key == "VAR":
+			if key == "VAR":
 				comp = [VAR(M,**comp_spec)]
 			elif key == "DIRECT":
 				comp = [DIRECT(M)]
+			elif key == "LEAKY":
+				comp = [LEAKY(M,**comp_spec)]
 			elif key == "RODAN":
 				comp = [RODAN(M,**comp_spec)]
 			elif key == "THRES":
 				comp = [THRES(M,**comp_spec) for i in range(comp_spec["N"])]
 			elif key == "TRIGGER":
 				comp = [TRIGGER(M,**comp_spec) for i in range(comp_spec["N"])]
+			elif key == "HEIGHTSENS":
+				comp = [HEIGHTSENS(M,**comp_spec)]
+			else:
+				print("Component not implemented!")
 			
 			components += comp
 
@@ -479,6 +508,9 @@ class Reservoir:
 		for transfer in mixing_spec:
 			sources = self.get_nodes_of_type(transfer[0])
 			targets = self.get_nodes_of_type(transfer[1])
+			#print(transfer)
+			#print(sources)
+			#print(targets)
 
 			if sources != [] and targets != []:
 				num = transfer[2]
@@ -551,6 +583,25 @@ class Reservoir:
 				line += " | "
 				line += " ".join(["({0:d},{1:.2f})".format(other.input_idx,weight) for other,weight in node.outputs]) + " -->"
 				print(line)
+
+	def print_significant(self,sig,sig_limit):
+		sig_nodes = np.where(sig < sig_limit)[0]
+		i = 0
+		node_idx = sig_nodes[i]
+		for comp in self.components:
+			if comp.get_output_idx() >= node_idx:
+				print("{0:s}: ".format(comp.get_typename()))
+			sigs = []
+			while comp.get_output_idx() >= node_idx:
+				#print("{0:s}: {1:.3f}".format(comp.get_typename(),sig[node_idx]))
+				sigs.append(sig[node_idx])
+				i += 1
+				try:
+					node_idx = sig_nodes[i]
+				except IndexError:
+					break
+			if sigs != []:
+				print(np.array(sigs))
 
 
 # helps with learning
@@ -626,3 +677,25 @@ class Kalman:
 
 	def set_X(self,X):
 		self.X = X
+
+if __name__ == '__main__':	
+	r = 0.25
+	g = ESN_f("INVERSE_DECAY",r)
+	h = ESN_f("DOUBLE_POSLIN",r)
+	f = lambda x: g(h(x))
+
+	a = np.linspace(-10,10,1000)
+
+	plt.plot(a,f(a))
+	plt.plot(a,a)
+	plt.plot(a,np.zeros_like(a))
+	plt.show()
+
+
+
+
+
+
+
+
+

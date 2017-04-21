@@ -8,6 +8,7 @@ import numpy as np
 import scipy.signal as ssignal
 import scipy.linalg as slinalg
 import copy
+import matplotlib.pyplot as plt
 
 import preprocessing as pp
 
@@ -210,6 +211,14 @@ def esn_sim(T,case):
 		composite[switch_time:] = wave2[switch_time:]
 
 		y = np.concatenate([switch,wave1,wave2,composite],axis=1)
+	elif case == "heightsens":
+		switch_time = 500 #np.random.randint(500,700)
+		low_prob = 0.4
+		high_prob = 0.7
+
+		low_arr = np.random.random([switch_time,1])<low_prob
+		high_arr = np.random.random([T-switch_time,1])<high_prob
+		y = np.concatenate([low_arr,high_arr])
 
 	return y
 

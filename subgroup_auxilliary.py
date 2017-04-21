@@ -69,6 +69,11 @@ def num_features(dat):
 	else:
 		return np.shape(dat)[1]
 
+def normalize_01(arr):
+	arr -= np.min(arr)
+	arr /= np.max(arr)
+	return arr
+
 ## Candidate generation
 
 def map_idx(arr,idx):
@@ -276,14 +281,14 @@ def impending_failure_datapoints(dat,failure,failure_horizon,style):
 	if failure:
 		X = dat
 		if style == "SVC":
-			y = np.concatenate([-np.ones([N-failure_horizon,1]), np.ones([failure_horizon,1])])
+			y = np.concatenate([np.zeros([N-failure_horizon,1]), np.ones([failure_horizon,1])])
 		elif style == "MLP":
 			multiplier = 1 #int(N/failure_horizon)
 
 			neg_X = dat[:-failure_horizon,:]
 			pos_X = dat[-failure_horizon:,:]
 			X = np.concatenate([neg_X]+multiplier*[pos_X])
-			y = np.concatenate([-np.ones([N-failure_horizon,1])] + multiplier*[np.ones([failure_horizon,1])])
+			y = np.concatenate([np.zeros([N-failure_horizon,1])] + multiplier*[np.ones([failure_horizon,1])])
 		elif style == "SVR":
 			far_to_fail = failure_horizon*np.ones([N-failure_horizon,1])
 			close_to_fail = -np.array(range(-failure_horizon+1,1),ndmin=2).T
@@ -291,7 +296,7 @@ def impending_failure_datapoints(dat,failure,failure_horizon,style):
 	else:
 		X = dat[:-failure_horizon,:]
 		if style in ["SVC","MLP"]:
-			y = -np.ones([N-failure_horizon,1])
+			y = np.zeros([N-failure_horizon,1])
 		elif style == "SVR":
 			y = failure_horizon*np.ones([N-failure_horizon,1])
 
@@ -342,12 +347,12 @@ def predict_data(dat,models,k):
 def classification_plot(pred,gt,style,failure_horizon):
 	for pred_arr,gt_arr in zip(pred,gt):
 		if style in ["SVC","MLP"]:
-			pred_arr = (pred_arr+1)/2
-			gt_arr = (gt_arr+1)/2
+			#pred_arr = normalize_01(pred_arr)
+			gt_arr = normalize_01(gt_arr)
 		elif style == "SVR":
 			pass
 
-		length = 5
+		length = 1
 		pred_arr = pp.filter([pred_arr],np.array([1]*length)/length,np.array([1]))[0]
 		#print(pred_arr)
 
@@ -361,3 +366,32 @@ def classification_plot(pred,gt,style,failure_horizon):
 			plt.axis([length,len(pred_arr), 0, failure_horizon+1])
 			plt.legend(["Predicted","Ground Truth"],loc=3)
 	plt.show()
+
+def classification_stats(GG,PG,PP):
+	spec = PG/GG
+	prec = PG/PP
+	am = (spec+prec)/2
+	hm = 2/(1/spec + 1/prec)
+
+	spec = spec[0][0]
+	prec = prec[0][0]
+	am = am[0][0]
+	hm = hm[0][0]
+
+	return spec,prec,am,hm
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

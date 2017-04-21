@@ -357,8 +357,10 @@ class ESN(MTS_Model):
 
 
 		sig = mod_aux.significant_nodes(X,Y)
+		self.reservoir.print_significant(sig,self.sig_limit)
 		self.sig_nodes = np.where(sig < self.sig_limit)[0]
-		print(sig[self.sig_nodes])
+
+		#print(sig[self.sig_nodes])
 		X = X[:,self.sig_nodes]
 		if len(self.sig_nodes) < self.Oh:
 			self.Oh = len(self.sig_nodes)
@@ -370,7 +372,7 @@ class ESN(MTS_Model):
 		#x = np.ravel(x)
 		
 		x = copy.deepcopy(X)
-		print("min: {0:.3f}, max: {1:.1f}, mean: {2:.1f}, std: {3:.3f}".format(np.min(x),np.max(x),np.mean(x),np.std(x)))
+		print("Node activations. min: {0:.3f}, max: {1:.1f}, mean: {2:.1f}, std: {3:.3f}".format(np.min(x),np.max(x),np.mean(x),np.std(x)))
 		for i in range(x.shape[0]):
 			for j in range(x.shape[1]):
 				if x[i,j] < -2 or x[i,j] > 2:
@@ -401,11 +403,12 @@ class ESN(MTS_Model):
 		X = np.concatenate(self.inputs,axis=0)
 		U = np.concatenate(self.external_inputs,axis=0)
 		#print("min: {0:.3f}, max: {1:.1f}, mean: {2:.1f}, std: {3:.3f}".format(np.min(X),np.max(X),np.mean(X),np.std(X)))
+		'''
 		for i in range(X.shape[0]):
 			for j in range(X.shape[1]):
 				if X[i,j] < -2 or X[i,j] > 2:
 					X[i,j] = 0
-
+		'''
 		f,axarr = plt.subplots(2,sharex = True)
 		axarr[0].imshow(X.T,interpolation='none')
 		#axarr[0].title("Node activations")
