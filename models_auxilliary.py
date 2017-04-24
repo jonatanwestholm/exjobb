@@ -356,16 +356,17 @@ class DIRECT(Component):
 		self.f = [ESN_f("LIN")]
 
 class LEAKY(Component):
-	def __init__(self,M,N,r):
+	def __init__(self,M,N,r,v):
 		super(LEAKY,self).__init__(N)
 		self.common_f = True
 		self.M = M
 		self.r = r
+		self.v = v
 		self.build()
 
 	def build(self):
 		self.A = ESN_A("DIAGONAL",self.N,self.r)
-		self.B = ESN_B("SECTIONS",self.M,self.N)
+		self.B = ESN_B("SECTIONS",self.M,self.N,v=self.v)
 		self.f = [ESN_f("LIN")]
 
 class RODAN(Component):
@@ -444,10 +445,10 @@ class HEIGHTSENS(Component):
 	def build(self):
 		self.A = ESN_A("DIAGONAL",self.N,r=1)
 		self.B = ESN_B("SECTIONS",self.M,self.N)
-		#g = ESN_f("INVERSE_DECAY",self.r)
-		#h = ESN_f("DOUBLE_POSLIN",self.r)
-		#self.f = [lambda x: g(h(x))]
-		self.f = [ESN_f("TANH")]
+		g = ESN_f("INVERSE_DECAY",self.r)
+		h = ESN_f("DOUBLE_POSLIN",self.r)
+		self.f = [lambda x: g(h(x))]
+		#self.f = [ESN_f("TANH")]
 
 # example:
 # spec = {"DIRECT": None,"VAR": {"p": 5}, "RODAN": {"N": 200}, "THRES": {"random_thres": True, "N": 20}}
@@ -588,9 +589,17 @@ class Reservoir:
 		sig_nodes = np.where(sig < sig_limit)[0]
 		i = 0
 		node_idx = sig_nodes[i]
+		print(sig_nodes)
 		for comp in self.components:
+			print(comp.get_typename())
+			print(comp.get_output_idx())
+		for comp in self.components:
+			#print(comp.get_typename())
+			#print(comp.get_output_idx())
+		
 			if comp.get_output_idx() >= node_idx:
 				print("{0:s}: ".format(comp.get_typename()))
+			
 			sigs = []
 			while comp.get_output_idx() >= node_idx:
 				#print("{0:s}: {1:.3f}".format(comp.get_typename(),sig[node_idx]))
@@ -599,7 +608,8 @@ class Reservoir:
 				try:
 					node_idx = sig_nodes[i]
 				except IndexError:
-					break
+					node_idx = self.total_size()
+
 			if sigs != []:
 				print(np.array(sigs))
 

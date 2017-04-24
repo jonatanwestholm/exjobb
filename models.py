@@ -360,7 +360,7 @@ class ESN(MTS_Model):
 		self.reservoir.print_significant(sig,self.sig_limit)
 		self.sig_nodes = np.where(sig < self.sig_limit)[0]
 
-		#print(sig[self.sig_nodes])
+		print(sig[self.sig_nodes])
 		X = X[:,self.sig_nodes]
 		if len(self.sig_nodes) < self.Oh:
 			self.Oh = len(self.sig_nodes)
@@ -402,6 +402,7 @@ class ESN(MTS_Model):
 	def plot_activations(self):
 		X = np.concatenate(self.inputs,axis=0)
 		U = np.concatenate(self.external_inputs,axis=0)
+		X = X[:,self.sig_nodes]
 		#print("min: {0:.3f}, max: {1:.1f}, mean: {2:.1f}, std: {3:.3f}".format(np.min(X),np.max(X),np.mean(X),np.std(X)))
 		'''
 		for i in range(X.shape[0]):
@@ -435,7 +436,7 @@ class ESN(MTS_Model):
 
 		return y
 
-	def predict(self,k,U=[]):
+	def predict(self,k=1,U=[]):
 		if self.purpose == "CLASSIFICATION":
 			#U = np.zeros([self.M,1])
 			if mod_aux.is_tensor(U,self.M>1):
@@ -468,29 +469,32 @@ class ESN(MTS_Model):
 		self.reset()
 
 class SVM_TS:
-	def __init__(self,subgroup,pos_w,style):
+	def __init__(self,subgroup,pos_w,purpose):
 		self.subgroup = subgroup
 		self.pos_w = pos_w
-		self.style = style
-		self.reset()
+		self.purpose = purpose
+		self.initiate()
 
-	def reset(self):
+	def initiate(self):
 		self.X = np.array([[]]*len(self.subgroup)).T
 		self.y = np.array([[]]).T
 		self.w = np.array([[]]).T 
-		if self.style == "SVC":
+		if self.purpose == "CLASSIFICATION":
 			self.sv = svm.SVC()
-		elif self.style == "SVR":
+		elif self.purpose == "REGRESSION":
 			self.sv = svm.SVR()
-		elif self.style == "MLP":
-			self.sv = MLPClassifier(solver='lbfgs', alpha=1e-5,
-                    				hidden_layer_sizes=(10,3), random_state=1)
+		#elif self.style == "MLP":
+		#	self.sv = MLPClassifier(solver='lbfgs', alpha=1e-5,
+        #	           				hidden_layer_sizes=(10,3), random_state=1)
+
+	def reset(self):
+		pass
 
 	def charge(self,X,y):
-		if self.style == "SVC":
+		if self.purpose == "CLASSIFICATION":
 			w = np.ones_like(y)
 			w[y==1] = self.pos_w
-		elif self.style == "SVR":
+		elif self.purpose == "SVR":
 			w = 1/(y+1/self.pos_w)
 		else:
 			w = [[0]]
@@ -500,10 +504,10 @@ class SVM_TS:
 		self.w = np.concatenate([self.w,w])
 
 	def train(self,return_score=False):
-		if "SV" in self.style:
-			self.sv.fit(self.X,np.ravel(self.y),np.ravel(self.w))
-		else:
-			self.sv.fit(self.X,np.ravel(self.y))
+		#if "SV" in self.style:
+		self.sv.fit(self.X,np.ravel(self.y),np.ravel(self.w))
+		#else:
+		#	self.sv.fit(self.X,np.ravel(self.y))
 		if return_score:
 			return self.sv.score(self.X,np.ravel(self.y),np.ravel(self.w))
 

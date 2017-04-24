@@ -189,6 +189,9 @@ def esn_sim(T,case):
 		composite = composite[:-1]
 
 		y = np.concatenate([switch,wave1,wave2,composite],axis=1)
+		
+		switch_time = 0
+
 	elif case == "trigger_waves":
 		switch = np.zeros([T,1])
 		switch_time = 200
@@ -199,6 +202,7 @@ def esn_sim(T,case):
 		composite[switch_time:] = wave2[switch_time:]
 
 		y = np.concatenate([switch,wave1,wave2,composite],axis=1)
+		
 	elif case == "random_trigger_waves":
 		switch = np.random.normal(0,1,[T,1])
 		trigger_level = 2.7
@@ -213,22 +217,31 @@ def esn_sim(T,case):
 		y = np.concatenate([switch,wave1,wave2,composite],axis=1)
 	elif case == "heightsens":
 		switch_time = 500 #np.random.randint(500,700)
-		low_prob = 0.4
-		high_prob = 0.7
+		low_prob = 0.1
+		high_prob = 0.8
 
 		low_arr = np.random.random([switch_time,1])<low_prob
 		high_arr = np.random.random([T-switch_time,1])<high_prob
 		y = np.concatenate([low_arr,high_arr])
+		y = np.array(y,dtype=float)
 
-	return y
+	gt = np.zeros([T,1])
+	gt[switch_time:] = 1
 
-def read(filename,elemsep,linesep):
-	filenames = glob.glob(filename+"*.csv")
+	return y,gt
+
+def read_pat(filename,elemsep,linesep,pat):
+	filenames = glob.glob(filename+pat)
 	print(filenames)
 	data = [np.array(pp.read_file(filename,elemsep,linesep,"all")) for filename in filenames]
-	return data	
+	return data
 
-def write(data,process_type,args):
+def read(filename,elemsep,linesep):
+	data = read_pat(filename,elemsep,linesep,"[0-9]+.csv")
+	gt = read_pat(filename,elemsep,linesep,"*_gt.csv")
+	return data,gt
+
+def write(data,gt,process_type,args):
 	dirname = "../data/sim/"+process_type+"/"
 	os.chdir(dirname)
 
@@ -241,5 +254,8 @@ def write(data,process_type,args):
 	for dat in data:
 		with open("{0:d}.csv".format(i),'w') as f:
 			f.write(pp.write_data(dat,args.linesep,args.elemsep))
+		if gt != []:
+			with open("{0:d}_gt.csv".format(i),'w') as f:
+				f.write(pp.write_data(gt[i-1],args.linesep,args.elemsep))
 		i+=1
 

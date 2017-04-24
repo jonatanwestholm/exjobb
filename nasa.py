@@ -159,9 +159,23 @@ def main(args):
 			#data = pp.filter(data,np.array([1]),np.array([1,-0.8]))
 			data = pp.normalize_all(data)
 
+			if args.test_type == "PREDICTION":
+				gt = []
+			elif args.test_type in ["CLASSIFICATION","REGRESSION"]:
+				X = []
+				Y = []
+				failed = [True]*len(data)
+
+				for x,y in pp.impending_failure(data,failed,args.settings["failure_horizon"],args.test_type):
+					X.append(x)
+					Y.append(y)
+
+				data = X
+				gt = Y
+
 			#print(changing)
 			print(explanations)
-			return data,explanations
+			return data,gt,explanations
 
 	else:	
 		if datatype == "SEQUENTIAL":

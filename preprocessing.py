@@ -150,8 +150,40 @@ def remove_unchanging(data):
 
 	return data,changing
 
+# Generating ground truth
+
+def impending_failure(data,failed,failure_horizon,test_type):
+	#if dataset in ["TURBOFAN","ESN_SIM"]:
+	#	for dat in data:
+	#		X,y = impending_failure_datapoints(dat,True,failure_horizon,test_type)
+	#		yield X,y
+	#elif dataset == "BACKBLAZE":
+	for dat,failure in zip(data,failed):
+		#failure = "_fail" in name
+		X,y = impending_failure_datapoints(dat,failure,failure_horizon,test_type)
+		yield X,y
+
+def impending_failure_datapoints(dat,failure,failure_horizon,test_type):
+	N,M = dat.shape
+	if failure:
+		X = dat
+		if test_type == "CLASSIFICATION":
+			y = np.concatenate([np.zeros([N-failure_horizon,1]), np.ones([failure_horizon,1])])
+		elif test_type == "REGRESSION":
+			far_to_fail = failure_horizon*np.ones([N-failure_horizon,1])
+			close_to_fail = -np.array(range(-failure_horizon+1,1),ndmin=2).T
+			y = np.concatenate([far_to_fail,close_to_fail])
+	else:
+		X = dat[:-failure_horizon,:]
+		if test_type == "CLASSIFICATION":
+			y = np.zeros([N-failure_horizon,1])
+		elif test_type == "REGRESSION":
+			y = failure_horizon*np.ones([N-failure_horizon,1])
+
+	return X,y
+
 # split data into train and test
-def split(data,split_method,train_share=0.6,test_share=0.2,names="",return_names=False):
+def split(data,gt,split_method,train_share=0.6,test_share=0.2,names="",return_names=False):
 	split_method = split_method
 	if split_method == "TIMEWISE":	
 		#train_share = 0.6
@@ -161,10 +193,13 @@ def split(data,split_method,train_share=0.6,test_share=0.2,names="",return_names
 		Split2 = [int(np.floor((train_share+test_share)*n)) for n in N] 
 
 		train_data = [dat[0:split1,:] for dat,split1 in zip(data,Split1)]
+		train_gt = [gt_inst[0:split1,:] for gt_inst,split1 in zip(gt,Split1)]
 		test_data = [dat[split1:split2,:] for dat,split1,split2 in zip(data,Split1,Split2)]
+		test_gt = [gt_inst[split1:split2,:] for gt_inst,split1,split2 in zip(gt,Split1,Split2)]
 
 		train_names = names
 		test_names = names
+		
 	elif split_method == "UNITWISE":
 		#train_share = 0.2
 		#test_share = 0.2
@@ -173,15 +208,17 @@ def split(data,split_method,train_share=0.6,test_share=0.2,names="",return_names
 		split2 = int(np.floor((train_share+test_share)*N))
 
 		train_data = data[0:split1]
+		train_gt = gt[0:split1]
 		test_data = data[split1:split2]
+		test_gt = gt[split1:split2]
 
 		train_names = names[0:split1]
 		test_names = names[split1:split2]
 
 	if return_names:
-		return train_data,test_data,train_names,test_names
+		return train_data,train_gt,test_data,test_gt,train_names,test_names
 	else:
-		return train_data,test_data
+		return train_data,train_gt,test_data,test_gt
 
 ## Visualizations
 

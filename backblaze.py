@@ -193,7 +193,23 @@ def main(args):
 			print("Qualified indexes: " + str(sorted(idxs)))
 			print("Explanations: " + str(explanations))
 
-			return data,explanations,just_the_names(filenames)
+			names = just_the_names(filenames)
+
+			if args.test_type == "PREDICTION":
+				gt = []
+			elif args.test_type in ["CLASSIFICATION","REGRESSION"]:
+				X = []
+				Y = []
+				failed = ["_fail" in name for name in names]
+
+				for x,y in pp.impending_failure(data,failed,args.settings["failure_horizon"],args.test_type):
+					X.append(x)
+					Y.append(y)
+
+				data = X
+				gt = Y
+
+			return data,explanations,names
 			
 	elif datatype == "INSTANCE":
 		pattern = '[0-9-]*.csv'

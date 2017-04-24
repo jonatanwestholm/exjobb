@@ -28,16 +28,17 @@ import backblaze
 def fetch(args):
 	dataset = args.dataset.upper()
 	names = ""
+	gt = []
 
 	if dataset in ["TURBOFAN","MILL","IGBT"]:
-		data,explanations = nasa.main(args)
+		data,gt,explanations = nasa.main(args)
 	elif dataset == "BACKBLAZE":
-		data,explanations,names = backblaze.main(args)
+		data,gt,explanations,names = backblaze.main(args)
 	#elif dataset == "ARMA_SIM":
 	#	data = sim.arma_sim(np.array([1]),np.array([1,0.5,-0.2]),1000,num=5)
 	elif dataset == "VARMA_SIM":
 		if args.filename:
-			data = sim.read(args.filename,args.elemsep,args.linesep)
+			data,gt = sim.read(args.filename,args.elemsep,args.linesep)
 			data = [pp.normalize(dat) for dat in data]
 		else:
 			num_timepoints = args.settings["num_timepoints"]
@@ -45,21 +46,27 @@ def fetch(args):
 			case = args.settings["case"]
 			data = [sim.mixed_varma(num_timepoints,case) for i in range(num_samples)]
 			data = [pp.normalize(dat) for dat in data]
-			sim.write(data,"VARMA",args)
+			sim.write(data,gt,"VARMA",args)
 
 		N = aux.num_features(data[0])
 		explanations = ["feature {0:d}".format(i) for i in range(N)]
 	elif dataset == "ESN_SIM":
 		if args.filename:
-			data = sim.read(args.filename,args.elemsep,args.linesep)
+			data,gt = sim.read(args.filename,args.elemsep,args.linesep)
 			#data = [pp.normalize(dat) for dat in data]
 		else:
 			num_timepoints = args.settings["num_timepoints"]
 			num_samples = args.settings["num_samples"]
 			case = args.settings["ESN_sim_case"]
-			data = [sim.esn_sim(num_timepoints,case) for i in range(num_samples)]
+			data = []
+			gt = []
+			for i in range(num_samples):
+				dat,gt_inst = sim.esn_sim(num_timepoints,case)
+				data.append(dat)
+				gt.append(gt_inst)
+
 			#data = [pp.normalize(dat) for dat in data]
-			sim.write(data,"ESN",args)
+			sim.write(data,gt,"ESN",args)
 
 		N = aux.num_features(data[0])
 		explanations = ["feature {0:d}".format(i) for i in range(N)]
@@ -75,7 +82,7 @@ def fetch(args):
 	#	aux.whiteness_test([dat],explanations)
 	#aux.whiteness_test(data,explanations)
 
-	return data
+	return data,gt
 
 ## Candidate Generation
 
@@ -126,10 +133,10 @@ def candidate_generate(train_data,remaining,num,args):
 ## Training
 
 # returns models = [obj]
-def train(data,subgroup,train_type,args):
+def train(train_data,train_gt,subgroup,train_type,args):
 	#print(np.shape(data[0]))
 	test_type = args.test_type
-	N = aux.num_features(data[0])
+	N = aux.num_features(train_data[0])
 
 	if train_type == "TRIVIAL":
 		mod = Models.Trivial()
@@ -140,13 +147,13 @@ def train(data,subgroup,train_type,args):
 		q = args.settings["VARMA_q"]
 		re_series = args.settings["re_series"]
 		rw_series = args.settings["rw_series"]
-		mods = [aux.train_varma(data,subgroup,p,q,re_series,rw_series)]
+		mods = [aux.train_varma(train_data,subgroup,p,q,re_series,rw_series)]
 	elif train_type == "ARMA_PARALLEL":
 		p = args.settings["VARMA_p"]
 		q = args.settings["ARMA_q"]
 		re_series = args.settings["re_series"]
 		rw_series = args.settings["rw_series"]
-		mods = [aux.train_varma([dat[:,i] for dat in data],[subgroup[i]],p,q,re_series,rw_series) for i in range(N)]
+		mods = [aux.train_varma([dat[:,i] for dat in train_data],[subgroup[i]],p,q,re_series,rw_series) for i in range(N)]
 	elif train_type == "ESN":
 		spec = args.settings["ESN_spec"]
 		mixing = args.settings["ESN_mixing"]
@@ -159,56 +166,40 @@ def train(data,subgroup,train_type,args):
 		classifier = args.settings["ESN_classifier"]
 
 		if test_type == "PREDICTION":
-			orders = [N,size_out,N]
-		elif test_type == "CLASSIFICATION":
-			orders = [N,size_out,1]
+			L = N
+		else:
+			L = 1
+		orders = [N,size_out,L]
 
 		mod = Models.ESN(purpose,orders,spec,mixing,pos_w,args.settings["ESN_sig_limit"],args.settings["ESN_classifier"],args.explanations)
 		mod.subgroup = subgroup
 
 		if test_type == "PREDICTION":
-			for i in range(args.settings["ESN_rebuild_iterations"]):
-				if i > 0:
-					mod.rebuild(args.settings["ESN_rebuild_types"],args.settings["ESN_impact_limit"])
-				if i == args.settings["ESN_rebuild_iterations"]-1:
-					pass #mod.classifier = "MLP"
+			train_gt = [None]*len(train_data)
 
-				for dat in data:
-					mod.charge(dat)
+		for x,y in zip(train_data,train_gt):
+			mod.charge(x,y)
 
-				mod.train(tikho)
+		mod.train(tikho)
 
-			mods = [mod]
-		elif test_type == "CLASSIFICATION":
-			mod.style = args.settings["style"]
-
-		#mods[0].print_esn()
+		mods = [mod]
 
 	elif train_type == "SVM":
-		mod = Models.SVM_TS(subgroup,args.settings["pos_w"],args.settings["style"])
+		mod = Models.SVM_TS(subgroup,args.settings["pos_w"],test_type)
 
-	if args.test_type == "CLASSIFICATION":
-		for i in range(args.settings["ESN_rebuild_iterations"]):
-			if i > 0:
-				mod.rebuild(args.settings["ESN_rebuild_types"],args.settings["ESN_impact_limit"])
+		for x,y in zip(train_data,train_gt):
+			mod.charge(x,y)
 
-			for X,y in aux.impending_failure(data,args.train_names,args.dataset,args.settings["failure_horizon"],mod.style):
-				mod.charge(X,y)
-
-			if train_type == "SVM":
-				mod.train()
-			elif train_type == "ESN":
-				mod.train(tikho)
-
+		mod.train()
 
 		mods = [mod]
 
 	return mods
 
-def subgroup_learn(train_data,subgroup,train_type,args):
+def subgroup_learn(train_data,train_gt,subgroup,train_type,args):
 	#print(type(subgroup))
 	if subgroup:
-		mods = train([dat[:,subgroup] for dat in train_data],subgroup,train_type,args)
+		mods = train([dat[:,subgroup] for dat in train_data],train_gt,subgroup,train_type,args)
 		return mods
 	else:
 		return []
@@ -232,7 +223,7 @@ def test(train_data,test_data,models,args):
 	split_method = args.split_method
 
 	pred = []
-	labels = []
+
 	if test_type == "PREDICTION":
 		# take prediction unit by unit - units are assumed to be independent
 		
@@ -249,30 +240,12 @@ def test(train_data,test_data,models,args):
 				pred.append(aux.predict_data(test_dat,models,k))
 
 	elif test_type == "CLASSIFICATION":
-		if args.model == "SVM":
-			mod = models[0] # assume that there is just one at first
-			#print(len(test_data))
-			#print(len(args.test_names))
-			for X,y in aux.impending_failure(test_data,args.test_names,args.dataset,args.settings["failure_horizon"],mod.style):
-				X = X[:,mod.subgroup]
-				pred.append(mod.predict(X))
-				labels.append(y)
+		mod = models[0]
+		for test_dat in test_data:
+			mod.reset()
+			pred.append(mod.predict(U=test_dat))
 
-		elif args.model == "ESN":
-			mod = models[0] # assume that there is just one at first
-			#print(len(test_data))
-			#print(len(args.test_names))
-			for X,y in aux.impending_failure(test_data,args.test_names,args.dataset,args.settings["failure_horizon"],mod.style):
-				mod.reset()
-				X = X[:,mod.subgroup]
-				pred.append(mod.predict(k,X))
-				#mod.update(X)
-				labels.append(y)
-			
-			#pred = np.concatenate(pred)
-			#labels = np.concatenate(labels)
-
-	return pred,labels
+	return pred
 
 # outputs performance scores, plots
 # this function should be split into two: one evaluate() and one present()
@@ -337,12 +310,14 @@ def evaluate(pred,gt,evaluate_on,args):
 		print("Total. spec: {0:.3f} prec: {1:.3f}, am: {2:.3f}, hm: {3:.3f}".format(spec,prec,am,hm))
 			
 		if args.plot:
-			aux.classification_plot(pred,gt,args.settings["style"],args.settings["failure_horizon"])
-		
+			aux.classification_plot(pred,gt)
+
+	elif test_type == "REGRESSION":
+		pass		
 
 	return 0
 
-def subgroup_score(train_data,test_data,sub_col,args,labels=[]):
+def subgroup_score(train_data,test_data,gt,sub_col,args):
 	pred_k = int(args.pred_k)
 	
 	test_type = args.test_type.upper()
@@ -362,8 +337,8 @@ def subgroup_score(train_data,test_data,sub_col,args,labels=[]):
 			print(str(mod.subgroup) + ": " +type(mod).__name__)
 
 		print(evaluate_on)
-	elif test_type == "CLASSIFICATION":
-		pred,gt = test(train_data,test_data,sub_col.candidates + sub_col.remaining,args)
+	elif test_type in ["CLASSIFICATION","REGRESSION"]:
+		pred = test(train_data,test_data,sub_col.candidates + sub_col.remaining,args)
 		evaluate_on = sub_col.candidates[0]
 	else:
 		print("Unknown test!")
@@ -390,16 +365,16 @@ def settings(args):
 				"re_series": np.logspace(-1,-6,num_series), "rw_series": 500*np.logspace(0,-1,num_series), # VARMA training
 				"num_timepoints": 1000, "num_samples": 10, "case": "case1", # VARMA sim
 				"train_share": 0.2, "test_share": 0.5, # splitting
-				"failure_horizon": 500, "pos_w": 1, "style": "MLP", # SVM 
+				"failure_horizon": 20, "pos_w": 1, "style": "MLP", # SVM 
 				#"A_architecture": "DLR", "B_architecture": "SECTIONS", "C_architecture": "SELECTED", "f_architecture": "TANH", # ESN
 				#"ESN_size_state": 500, 
 				"ESN_spec": [#("RODAN", {"N": 500,"v":0}),
 							#("RODAN",{"N":200,"v":1}),
 							#("VAR", {"p": 10}),
 							#("THRES", {"N": 200,"random_thres":True,"direct_input":False}),
-							("TRIGGER", {"N": 200,"random_thres": True}),
-							("LEAKY", {"N": 200, "r": 0.9}),
-							("HEIGHTSENS", {"N": 200, "random_thres": True}),
+							("TRIGGER", {"N": 20,"random_thres": True,"direct_input":False}),
+							("LEAKY", {"N": 20, "r": 0.8,"v":0}),
+							("HEIGHTSENS", {"N": 20, "random_thres": True}),
 							#("DIRECT",None),
 							#("BIAS",None),
 							],
@@ -407,17 +382,21 @@ def settings(args):
 				"ESN_burn_in": 10,"ESN_batch_train" : True,"ESN_tikhonov_const": 10,  # ESN training
 				"ESN_sim_case": "heightsens", # ESN sim
 				"ESN_mixing": [("TRIGGER","RODAN",150), ("THRES","RODAN",100), ("RODAN","TRIGGER",1), ("RODAN","THRES",100),
-							   ("THRES","VAR",1), ("VAR","TRIGGER",1), ("LEAKY","TRIGGER",200), ("THRES","LEAKY",50), ("LEAKY","RODAN",100),
-							   ("HEIGHTSENS","HEIGHTSENS",1),("HEIGHTSENS","LEAKY",200)],
+							   ("THRES","VAR",1), ("VAR","TRIGGER",1), ("LEAKY","TRIGGER",20), ("THRES","LEAKY",50), ("LEAKY","RODAN",100),
+							   ("HEIGHTSENS","HEIGHTSENS",1),("HEIGHTSENS","LEAKY",20)],
 				"ESN_rebuild_types": ["THRES","TRIGGER"], "ESN_rebuild_iterations": 1, "ESN_impact_limit": 1e-2,
-				"ESN_classifier": "LINEAR","ESN_sig_limit": 0.3
+				"ESN_classifier": "LINEAR","ESN_sig_limit": 0.01
 				}
 
 	args.settings = settings
 
-def subgroup(data,args):
-	train_data,test_data,train_names,test_names = pp.split(data,args.split_method,train_share=args.settings["train_share"],test_share=args.settings["test_share"],names=args.names,return_names=True)
-	
+def subgroup(data,gt,args):
+	train_data,train_gt,test_data,test_gt,train_names,test_names = pp.split(data,gt,
+																			args.split_method,
+																			train_share=args.settings["train_share"],
+																			test_share=args.settings["test_share"],
+																			names=args.names,
+																			return_names=True)
 	#test_data = train_data
 	#test_names = train_names
 
@@ -449,12 +428,12 @@ def subgroup(data,args):
 		print(cand)
 		for model in [args.model]:
 			print(model)
-			mods = subgroup_learn(train_data,cand,model,args)
+			mods = subgroup_learn(train_data,train_gt,cand,model,args)
 			#print(mods[0].Cs)
 			#for mod in mods:
 			#	print(mod.q)
 			sub_col.add(mods,"CANDIDATES")
-			subgroup_score(train_data,test_data,sub_col,args)
+			subgroup_score(train_data,test_data,test_gt,sub_col,args)
 
 			sub_col.reset()
 			#if not subgroup_select(mods,sub_col,args):
@@ -468,10 +447,10 @@ def subgroup(data,args):
 	
 def main(args):
 	settings(args)
-	data = fetch(args)
+	data,gt = fetch(args)
 
 	# subgroup learning
-	subgroup(data,args)
+	subgroup(data,gt,args)
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()

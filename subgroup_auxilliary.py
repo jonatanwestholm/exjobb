@@ -265,43 +265,6 @@ def plot_train(A_hist,C_hist,train_type):
 
 	plt.show()
 
-def impending_failure(data,names,dataset,failure_horizon,style):
-	if dataset in ["TURBOFAN","ESN_SIM"]:
-		for dat in data:
-			X,y = impending_failure_datapoints(dat,True,failure_horizon,style)
-			yield X,y
-	elif dataset == "BACKBLAZE":
-		for dat,name in zip(data,names):
-			failure = "_fail" in name
-			X,y = impending_failure_datapoints(dat,failure,failure_horizon,style)
-			yield X,y
-
-def impending_failure_datapoints(dat,failure,failure_horizon,style):
-	N,M = dat.shape
-	if failure:
-		X = dat
-		if style == "SVC":
-			y = np.concatenate([np.zeros([N-failure_horizon,1]), np.ones([failure_horizon,1])])
-		elif style == "MLP":
-			multiplier = 1 #int(N/failure_horizon)
-
-			neg_X = dat[:-failure_horizon,:]
-			pos_X = dat[-failure_horizon:,:]
-			X = np.concatenate([neg_X]+multiplier*[pos_X])
-			y = np.concatenate([np.zeros([N-failure_horizon,1])] + multiplier*[np.ones([failure_horizon,1])])
-		elif style == "SVR":
-			far_to_fail = failure_horizon*np.ones([N-failure_horizon,1])
-			close_to_fail = -np.array(range(-failure_horizon+1,1),ndmin=2).T
-			y = np.concatenate([far_to_fail,close_to_fail])
-	else:
-		X = dat[:-failure_horizon,:]
-		if style in ["SVC","MLP"]:
-			y = np.zeros([N-failure_horizon,1])
-		elif style == "SVR":
-			y = failure_horizon*np.ones([N-failure_horizon,1])
-
-	return X,y
-
 '''
 def remaining_features(N,models):
 	remains = list(range(N))
@@ -344,14 +307,8 @@ def predict_data(dat,models,k):
 
 # Visualization
 
-def classification_plot(pred,gt,style,failure_horizon):
+def classification_plot(pred,gt):
 	for pred_arr,gt_arr in zip(pred,gt):
-		if style in ["SVC","MLP"]:
-			#pred_arr = normalize_01(pred_arr)
-			gt_arr = normalize_01(gt_arr)
-		elif style == "SVR":
-			pass
-
 		length = 1
 		pred_arr = pp.filter([pred_arr],np.array([1]*length)/length,np.array([1]))[0]
 		#print(pred_arr)
@@ -359,12 +316,8 @@ def classification_plot(pred,gt,style,failure_horizon):
 		plt.figure()
 		plt.plot(pred_arr,'b')
 		plt.plot(gt_arr,'r')
-		if style in ["SVC","MLP"]:
-			plt.axis([0,len(pred_arr), -0.1, 1.1])
-			plt.legend(["Predicted","Ground Truth"],loc=2)
-		elif style == "SVR":
-			plt.axis([length,len(pred_arr), 0, failure_horizon+1])
-			plt.legend(["Predicted","Ground Truth"],loc=3)
+		plt.axis([0,len(pred_arr), min(gt_arr)-0.1,max(gt_arr)+0.1])
+		plt.legend(["Predicted","Ground Truth"],loc='best')
 	plt.show()
 
 def classification_stats(GG,PG,PP):
