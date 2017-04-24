@@ -360,7 +360,7 @@ class ESN(MTS_Model):
 		self.reservoir.print_significant(sig,self.sig_limit)
 		self.sig_nodes = np.where(sig < self.sig_limit)[0]
 
-		print(sig[self.sig_nodes])
+		#print(sig[self.sig_nodes])
 		X = X[:,self.sig_nodes]
 		if len(self.sig_nodes) < self.Oh:
 			self.Oh = len(self.sig_nodes)
@@ -511,5 +511,5 @@ class SVM_TS:
 		if return_score:
 			return self.sv.score(self.X,np.ravel(self.y),np.ravel(self.w))
 
-	def predict(self,dat):
-		return self.sv.predict(dat)
+	def predict(self,U):
+		return self.sv.predict(U)

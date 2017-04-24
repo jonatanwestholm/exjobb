@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 esn_component_sizes = {"VAR":1,"RODAN":1,"DIRECT":1,"THRES":2,"TRIGGER":3}
 
 THRES_HIGH = 100000
-
+TH = THRES_HIGH
 
 # turns list of lists into list
 def flatten(lst):
@@ -201,22 +201,24 @@ def ESN_f(architecture,thres=0):
 	elif architecture == "DOUBLE_POSLIN":
 		f = lambda x: (np.abs(x)>thres)*x + (np.abs(x)<=thres)*thres
 	elif architecture == "THRES":
-		f = lambda x: x>thres
+		f = lambda x: (x>thres)*1.0
 	elif architecture == "INVERSE_DECAY":
 		f = lambda x: x - thres**2/x
 
 	return f
 
-def make_thres(M, direct_input, random_thres, turn_on):
+def make_thres(M, N, direct_input, random_thres, turn_on):
+	B = ESN_B("SELECTED",M,2*N)
+	B[N:,:] = 0
 	if direct_input:
-		B = ESN_B("SELECTED",M,2,replace=False)
-	else:
-		B = ESN_B("SELECTED",M,2,v=0)
+		B[:N,:] = 0
 
-	A = sparse.diags([THRES_HIGH],[-1])
+	lower_diag = np.ravel(TH*np.ones([N,1]))
+
+	A = sparse.diags([lower_diag], [-N])
 
 	if random_thres:
-		THRES = np.random.normal(0,1)
+		THRES = np.random.normal(0,1,[N,1])
 	else:
 		THRES = 0
 
@@ -229,25 +231,30 @@ def make_thres(M, direct_input, random_thres, turn_on):
 	A = A.tocsr()
 	return A,B,f
 
-def make_trigger(M, direct_input, random_thres, turn_on):
-	if direct_input:
-		B = ESN_B("SELECTED",M,3)
-		B[1,:] = 0
-	else:
-		B = ESN_B("SELECTED",M,3)
-		B[1:,:] = 0
+def make_trigger(M, N, direct_input, random_thres, turn_on):
+	B = ESN_B("SELECTED",M,3*N)
+	B[N:,:] = 0
+	if not direct_input:
+		B[:N,0] = 0
 
 	if random_thres:
-		THRES = np.random.normal(0,1)
+		THRES = np.random.normal(0,1,[N,1])
 	else:
-		THRES = 0
+		THRES = np.zeros([N,1])
+
+	A2A = np.zeros([N,1])
+	A2B = np.ones([N,1])
+	B2B = TH*np.ones([N,1])
+	B2C = TH*np.ones([N,1])
+	main_diag = np.ravel(np.concatenate([A2A,B2B,A2A]))
+	lower_diag = np.ravel(np.concatenate([A2B,B2C]))
 
 	if turn_on:
 		f = [ESN_f("THRES",THRES), ESN_f("THRES",0), ESN_f("POSLIN",THRES_HIGH)]
-		A = sparse.diags([[0,THRES_HIGH,0],[1,THRES_HIGH]],[0,-1])
+		A = sparse.diags([main_diag,lower_diag],[0,-N])
 	else:
 		f = [ESN_f("THRES",THRES), ESN_f("THRES",0), ESN_f("POSLIN",0)]
-		A = sparse.diags([[0,THRES_HIGH,0],[1,-THRES_HIGH]],[0,-1])
+		A = sparse.diags([main_diag,-lower_diag],[0,-N])
 
 	A = A.tocsr()
 	return A,B,f
@@ -295,10 +302,7 @@ class Component:
 		return self.input_idx + self.N - 1
 
 	def get_index_groups(self):
-		if self.common_f:
-			return [(self.input_idx,self.get_output_idx()+1)]
-		else:
-			return [(i,i+1) for i in range(self.input_idx,self.get_output_idx()+1)]
+		return [(self.input_idx,self.get_output_idx()+1)]
 
 	def build_nodes(self,input_idx):
 		self.set_input_idx(input_idx)
@@ -327,7 +331,6 @@ class VAR(Component):
 	def __init__(self,M,p):
 		p = p + 1 # to agree with common notation
 		super(VAR,self).__init__(M*p)
-		self.common_f = True
 		self.M = M
 		self.p = p
 		self.build()
@@ -345,7 +348,6 @@ class VAR(Component):
 class DIRECT(Component):
 	def __init__(self,M):
 		super(DIRECT,self).__init__(M)
-		self.common_f = True
 		self.M = M
 		self.build()
 
@@ -358,7 +360,6 @@ class DIRECT(Component):
 class LEAKY(Component):
 	def __init__(self,M,N,r,v):
 		super(LEAKY,self).__init__(N)
-		self.common_f = True
 		self.M = M
 		self.r = r
 		self.v = v
@@ -372,7 +373,6 @@ class LEAKY(Component):
 class RODAN(Component):
 	def __init__(self,M,N,r=0.5,v=1):
 		super(RODAN,self).__init__(N)
-		self.common_f = True
 		self.M = M
 		self.N_init = N
 		self.r = r 
@@ -392,7 +392,6 @@ class RODAN(Component):
 class THRES(Component):
 	def __init__(self,M,N=1,direct_input=True,random_thres=False,turn_on=True):
 		super(THRES,self).__init__(2)
-		self.common_f = False
 		self.M = M
 		self.direct_input = direct_input
 		self.random_thres = random_thres
@@ -404,16 +403,21 @@ class THRES(Component):
 		direct_input = self.direct_input
 		random_thres = self.random_thres
 		turn_on = self.turn_on
-		self.A,self.B,self.f = make_thres(M,direct_input,random_thres,turn_on)
+		self.A,self.B,self.f = make_thres(M,self.N,direct_input,random_thres,turn_on)
 
-	def build_nodes(self,input_idx):
-		self.set_input_idx(input_idx)
-		self.nodes = [Node(self.input_idx,self.get_output_idx())]
+	#def build_nodes(self,input_idx):
+	#	self.set_input_idx(input_idx)
+	#	self.nodes = [Node(self.input_idx,self.get_output_idx())]
+
+	def get_index_groups(self):
+		start = self.input_idx
+		N = self.N
+		return [(start+0*N,start+1*N),
+				(start+1*N,start+2*N)]
 
 class TRIGGER(Component):
 	def __init__(self,M,N=1,direct_input=True,random_thres=False,turn_on=True):
 		super(TRIGGER,self).__init__(3)
-		self.common_f = False
 		self.M = M
 		self.direct_input = direct_input
 		self.random_thres = random_thres
@@ -425,16 +429,22 @@ class TRIGGER(Component):
 		direct_input = self.direct_input
 		random_thres = self.random_thres
 		turn_on = self.turn_on
-		self.A,self.B,self.f = make_trigger(M,direct_input,random_thres,turn_on)
+		self.A,self.B,self.f = make_trigger(M,self.N,direct_input,random_thres,turn_on)
 
-	def build_nodes(self,input_idx):
-		self.set_input_idx(input_idx)
-		self.nodes = [Node(self.input_idx,self.get_output_idx())]
+	#def build_nodes(self,input_idx):
+	#	self.set_input_idx(input_idx)
+	#	self.nodes = [Node(self.input_idx,self.get_output_idx())]
+
+	def get_index_groups(self):
+		start = self.input_idx
+		N = self.N
+		return [(start+0*N,start+1*N),
+				(start+1*N,start+2*N),
+				(start+2*N,start+3*N)]
 
 class HEIGHTSENS(Component):
 	def __init__(self,M,N,random_thres):
 		super(HEIGHTSENS,self).__init__(N)
-		self.common_f = True
 		self.M = M
 		if random_thres:
 			self.r = 1*np.random.random([N,1])
@@ -493,9 +503,9 @@ class Reservoir:
 			elif key == "RODAN":
 				comp = [RODAN(M,**comp_spec)]
 			elif key == "THRES":
-				comp = [THRES(M,**comp_spec) for i in range(comp_spec["N"])]
+				comp = [THRES(M,**comp_spec)]
 			elif key == "TRIGGER":
-				comp = [TRIGGER(M,**comp_spec) for i in range(comp_spec["N"])]
+				comp = [TRIGGER(M,**comp_spec)]
 			elif key == "HEIGHTSENS":
 				comp = [HEIGHTSENS(M,**comp_spec)]
 			else:
@@ -589,10 +599,10 @@ class Reservoir:
 		sig_nodes = np.where(sig < sig_limit)[0]
 		i = 0
 		node_idx = sig_nodes[i]
-		print(sig_nodes)
-		for comp in self.components:
-			print(comp.get_typename())
-			print(comp.get_output_idx())
+		#print(sig_nodes)
+		#for comp in self.components:
+		#	print(comp.get_typename())
+		#	print(comp.get_output_idx())
 		for comp in self.components:
 			#print(comp.get_typename())
 			#print(comp.get_output_idx())

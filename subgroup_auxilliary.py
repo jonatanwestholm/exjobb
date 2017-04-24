@@ -326,10 +326,14 @@ def classification_stats(GG,PG,PP):
 	am = (spec+prec)/2
 	hm = 2/(1/spec + 1/prec)
 
-	spec = spec[0][0]
-	prec = prec[0][0]
-	am = am[0][0]
-	hm = hm[0][0]
+	#spec = spec[0][0]
+	#prec = prec[0][0]
+	#am = am[0][0]
+	#hm = hm[0][0]
+	#print(spec)
+	#print(prec)
+	#print(am)
+	#print(hm)
 
 	return spec,prec,am,hm
 

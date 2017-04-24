@@ -292,7 +292,7 @@ def evaluate(pred,gt,evaluate_on,args):
 		PP_all = 0
 		for P,G in zip(pred,gt):
 			GG = np.sum(G)
-			PG = np.dot(P.T,G)
+			PG = float(np.dot(P.T,G))
 			PP = np.sum(P)
 			GG_all += GG
 			PG_all += PG
@@ -364,18 +364,18 @@ def settings(args):
 				"VARMA_p": 2, "VARMA_q": 0, "ARMA_q": 2, # VARMA orders
 				"re_series": np.logspace(-1,-6,num_series), "rw_series": 500*np.logspace(0,-1,num_series), # VARMA training
 				"num_timepoints": 1000, "num_samples": 10, "case": "case1", # VARMA sim
-				"train_share": 0.2, "test_share": 0.5, # splitting
+				"train_share": 0.1, "test_share": 0.1, # splitting
 				"failure_horizon": 20, "pos_w": 1, "style": "MLP", # SVM 
 				#"A_architecture": "DLR", "B_architecture": "SECTIONS", "C_architecture": "SELECTED", "f_architecture": "TANH", # ESN
 				#"ESN_size_state": 500, 
-				"ESN_spec": [#("RODAN", {"N": 500,"v":0}),
-							#("RODAN",{"N":200,"v":1}),
-							#("VAR", {"p": 10}),
-							#("THRES", {"N": 200,"random_thres":True,"direct_input":False}),
-							("TRIGGER", {"N": 20,"random_thres": True,"direct_input":False}),
-							("LEAKY", {"N": 20, "r": 0.8,"v":0}),
-							("HEIGHTSENS", {"N": 20, "random_thres": True}),
-							#("DIRECT",None),
+				"ESN_spec": [("RODAN", {"N": 500,"v":0}),
+							("RODAN",{"N":200,"v":1}),
+							("VAR", {"p": 10}),
+							("THRES", {"N": 200,"random_thres":True,"direct_input":False}),
+							("TRIGGER", {"N": 200,"random_thres": True,"direct_input":False}),
+							("LEAKY", {"N": 200, "r": 0.8,"v":0}),
+							("HEIGHTSENS", {"N": 200, "random_thres": True}),
+							("DIRECT",None),
 							#("BIAS",None),
 							],
 				"ESN_size_out": 60, # ESN
@@ -383,9 +383,9 @@ def settings(args):
 				"ESN_sim_case": "heightsens", # ESN sim
 				"ESN_mixing": [("TRIGGER","RODAN",150), ("THRES","RODAN",100), ("RODAN","TRIGGER",1), ("RODAN","THRES",100),
 							   ("THRES","VAR",1), ("VAR","TRIGGER",1), ("LEAKY","TRIGGER",20), ("THRES","LEAKY",50), ("LEAKY","RODAN",100),
-							   ("HEIGHTSENS","HEIGHTSENS",1),("HEIGHTSENS","LEAKY",20)],
+							   ("HEIGHTSENS","HEIGHTSENS",1),("HEIGHTSENS","LEAKY",200)],
 				"ESN_rebuild_types": ["THRES","TRIGGER"], "ESN_rebuild_iterations": 1, "ESN_impact_limit": 1e-2,
-				"ESN_classifier": "LINEAR","ESN_sig_limit": 0.01
+				"ESN_classifier": "LINEAR","ESN_sig_limit": 0.9
 				}
 
 	args.settings = settings
