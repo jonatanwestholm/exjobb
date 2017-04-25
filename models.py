@@ -230,8 +230,8 @@ class ESN(MTS_Model):
 
 		self.learners = None
 		if self.classifier == "MLP":
-			self.sv = MLPRegressor(solver='lbfgs', alpha=1e-5,
-                    			hidden_layer_sizes=(10,3), random_state=1)
+			self.sv = MLPClassifier(solver='lbfgs', alpha=1e-5,
+                    			hidden_layer_sizes=(5), random_state=1)
 		elif self.classifier == "SVM":
 			self.sv = svm.SVR()			
 
@@ -402,14 +402,14 @@ class ESN(MTS_Model):
 	def plot_activations(self):
 		X = np.concatenate(self.inputs,axis=0)
 		U = np.concatenate(self.external_inputs,axis=0)
-		X = X[:,self.sig_nodes]
+		#X = X[:,self.sig_nodes]
 		#print("min: {0:.3f}, max: {1:.1f}, mean: {2:.1f}, std: {3:.3f}".format(np.min(X),np.max(X),np.mean(X),np.std(X)))
-		'''
+		
 		for i in range(X.shape[0]):
 			for j in range(X.shape[1]):
 				if X[i,j] < -2 or X[i,j] > 2:
-					X[i,j] = 0
-		'''
+					X[i,j] *= 2/np.abs(X[i,j])
+		
 		f,axarr = plt.subplots(2,sharex = True)
 		axarr[0].imshow(X.T,interpolation='none')
 		#axarr[0].title("Node activations")
@@ -494,7 +494,7 @@ class SVM_TS:
 		if self.purpose == "CLASSIFICATION":
 			w = np.ones_like(y)
 			w[y==1] = self.pos_w
-		elif self.purpose == "SVR":
+		elif self.purpose == "REGRESSION":
 			w = 1/(y+1/self.pos_w)
 		else:
 			w = [[0]]

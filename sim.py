@@ -237,7 +237,7 @@ def read_pat(filename,elemsep,linesep,pat):
 	return data
 
 def read(filename,elemsep,linesep):
-	data = read_pat(filename,elemsep,linesep,"[0-9]+.csv")
+	data = read_pat(filename,elemsep,linesep,"*[0-9].csv")
 	gt = read_pat(filename,elemsep,linesep,"*_gt.csv")
 	return data,gt
 

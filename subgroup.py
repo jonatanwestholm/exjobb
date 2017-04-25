@@ -14,6 +14,7 @@ import sim
 import models as Models
 import nasa
 import backblaze
+import occupancy
 
 # auxilliary
 
@@ -34,6 +35,8 @@ def fetch(args):
 		data,gt,explanations = nasa.main(args)
 	elif dataset == "BACKBLAZE":
 		data,gt,explanations,names = backblaze.main(args)
+	elif dataset == "OCCUPANCY":
+		data,gt,explanations,names = occupancy.main(args)
 	#elif dataset == "ARMA_SIM":
 	#	data = sim.arma_sim(np.array([1]),np.array([1,0.5,-0.2]),1000,num=5)
 	elif dataset == "VARMA_SIM":
@@ -364,28 +367,27 @@ def settings(args):
 				"VARMA_p": 2, "VARMA_q": 0, "ARMA_q": 2, # VARMA orders
 				"re_series": np.logspace(-1,-6,num_series), "rw_series": 500*np.logspace(0,-1,num_series), # VARMA training
 				"num_timepoints": 1000, "num_samples": 10, "case": "case1", # VARMA sim
-				"train_share": 0.1, "test_share": 0.1, # splitting
-				"failure_horizon": 20, "pos_w": 1, "style": "MLP", # SVM 
+				"train_share": 0.4, "test_share": 0.6, # splitting
+				"failure_horizon": 20, "pos_w": 2, # classification and regression
 				#"A_architecture": "DLR", "B_architecture": "SECTIONS", "C_architecture": "SELECTED", "f_architecture": "TANH", # ESN
 				#"ESN_size_state": 500, 
-				"ESN_spec": [("RODAN", {"N": 500,"v":0}),
+				"ESN_spec": [#("RODAN", {"N": 500,"v":0}),
 							("RODAN",{"N":200,"v":1}),
-							("VAR", {"p": 10}),
-							("THRES", {"N": 200,"random_thres":True,"direct_input":False}),
-							("TRIGGER", {"N": 200,"random_thres": True,"direct_input":False}),
-							("LEAKY", {"N": 200, "r": 0.8,"v":0}),
-							("HEIGHTSENS", {"N": 200, "random_thres": True}),
+							#("VAR", {"p": 10}),
+							("THRES", {"N": 200,"random_thres":True,"direct_input":True}),
+							#("TRIGGER", {"N": 500,"random_thres": True,"direct_input":True}),
+							#("LEAKY", {"N": 200, "r": 0.8,"v":1}),
+							("HEIGHTSENS", {"N": 500, "random_thres": True}),
 							("DIRECT",None),
-							#("BIAS",None),
 							],
-				"ESN_size_out": 60, # ESN
+				"ESN_size_out": 20, # ESN
 				"ESN_burn_in": 10,"ESN_batch_train" : True,"ESN_tikhonov_const": 10,  # ESN training
-				"ESN_sim_case": "heightsens", # ESN sim
-				"ESN_mixing": [("TRIGGER","RODAN",150), ("THRES","RODAN",100), ("RODAN","TRIGGER",1), ("RODAN","THRES",100),
+				"ESN_sim_case": "trigger_waves", # ESN sim
+				"ESN_mixing": [("TRIGGER","RODAN",200), ("THRES","RODAN",100), ("RODAN","TRIGGER",200), ("RODAN","THRES",100),
 							   ("THRES","VAR",1), ("VAR","TRIGGER",1), ("LEAKY","TRIGGER",20), ("THRES","LEAKY",50), ("LEAKY","RODAN",100),
-							   ("HEIGHTSENS","HEIGHTSENS",1),("HEIGHTSENS","LEAKY",200)],
+							   ("HEIGHTSENS","HEIGHTSENS",1),("HEIGHTSENS","LEAKY",200),("RODAN","HEIGHTSENS",200)],
 				"ESN_rebuild_types": ["THRES","TRIGGER"], "ESN_rebuild_iterations": 1, "ESN_impact_limit": 1e-2,
-				"ESN_classifier": "LINEAR","ESN_sig_limit": 0.9
+				"ESN_classifier": "MLP", "ESN_sig_limit": 0.1
 				}
 
 	args.settings = settings

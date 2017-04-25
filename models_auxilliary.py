@@ -304,6 +304,12 @@ class Component:
 	def get_index_groups(self):
 		return [(self.input_idx,self.get_output_idx()+1)]
 
+	def get_input_nodes(self):
+		return self.nodes
+
+	def get_output_nodes(self):
+		return self.nodes
+
 	def build_nodes(self,input_idx):
 		self.set_input_idx(input_idx)
 		self.nodes = self.matrix_to_nodes(self.A)
@@ -390,8 +396,9 @@ class RODAN(Component):
 		return list(range(self.input_idx,self.get_output_idx()))
 
 class THRES(Component):
-	def __init__(self,M,N=1,direct_input=True,random_thres=False,turn_on=True):
-		super(THRES,self).__init__(2)
+	def __init__(self,M,N,direct_input=True,random_thres=False,turn_on=True):
+		super(THRES,self).__init__(2*N)
+		self.number = N
 		self.M = M
 		self.direct_input = direct_input
 		self.random_thres = random_thres
@@ -403,7 +410,7 @@ class THRES(Component):
 		direct_input = self.direct_input
 		random_thres = self.random_thres
 		turn_on = self.turn_on
-		self.A,self.B,self.f = make_thres(M,self.N,direct_input,random_thres,turn_on)
+		self.A,self.B,self.f = make_thres(M,self.number,direct_input,random_thres,turn_on)
 
 	#def build_nodes(self,input_idx):
 	#	self.set_input_idx(input_idx)
@@ -411,13 +418,20 @@ class THRES(Component):
 
 	def get_index_groups(self):
 		start = self.input_idx
-		N = self.N
+		N = self.number
 		return [(start+0*N,start+1*N),
 				(start+1*N,start+2*N)]
 
+	def get_input_nodes(self):
+		return self.nodes[:self.number]
+
+	def get_output_nodes(self):
+		return self.nodes[-self.number:]
+
 class TRIGGER(Component):
-	def __init__(self,M,N=1,direct_input=True,random_thres=False,turn_on=True):
-		super(TRIGGER,self).__init__(3)
+	def __init__(self,M,N,direct_input=True,random_thres=False,turn_on=True):
+		super(TRIGGER,self).__init__(3*N)
+		self.number = N
 		self.M = M
 		self.direct_input = direct_input
 		self.random_thres = random_thres
@@ -429,7 +443,7 @@ class TRIGGER(Component):
 		direct_input = self.direct_input
 		random_thres = self.random_thres
 		turn_on = self.turn_on
-		self.A,self.B,self.f = make_trigger(M,self.N,direct_input,random_thres,turn_on)
+		self.A,self.B,self.f = make_trigger(M,self.number,direct_input,random_thres,turn_on)
 
 	#def build_nodes(self,input_idx):
 	#	self.set_input_idx(input_idx)
@@ -437,10 +451,16 @@ class TRIGGER(Component):
 
 	def get_index_groups(self):
 		start = self.input_idx
-		N = self.N
+		N = self.number
 		return [(start+0*N,start+1*N),
 				(start+1*N,start+2*N),
 				(start+2*N,start+3*N)]
+
+	def get_input_nodes(self):
+		return self.nodes[:self.number]
+
+	def get_output_nodes(self):
+		return self.nodes[-self.number:]
 
 class HEIGHTSENS(Component):
 	def __init__(self,M,N,random_thres):
@@ -517,9 +537,9 @@ class Reservoir:
 
 	def mix(self,mixing_spec,replace):
 		for transfer in mixing_spec:
-			sources = self.get_nodes_of_type(transfer[0])
-			targets = self.get_nodes_of_type(transfer[1])
-			#print(transfer)
+			sources = self.get_output_nodes_of_type(transfer[0])
+			targets = self.get_input_nodes_of_type(transfer[1])
+			print(transfer)
 			#print(sources)
 			#print(targets)
 
@@ -536,8 +556,11 @@ class Reservoir:
 	def get_nodes(self): # return all nodes in reservoir as list
 		return flatten([comp.nodes for comp in self.components])
 
-	def get_nodes_of_type(self,comp_type): # return all nodes of a certain type
-		return flatten([comp.nodes for comp in self.components if comp.get_typename() == comp_type])
+	def get_input_nodes_of_type(self,comp_type): # return all nodes of a certain type
+		return flatten([comp.get_input_nodes() for comp in self.components if comp.get_typename() == comp_type])
+
+	def get_output_nodes_of_type(self,comp_type): # return all nodes of a certain type
+		return flatten([comp.get_output_nodes() for comp in self.components if comp.get_typename() == comp_type])
 
 	def build_nodes(self):
 		lengths = [comp.N for comp in self.components]

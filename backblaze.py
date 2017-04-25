@@ -38,7 +38,7 @@ def smart_expl(idx):
 		expl = "S.M.A.R.T feature " + str(BB_SMART_order[idx])
 	return expl
 
-def melt_instance(args,dir_name,pattern,location):
+def melt_instance(args,dir_name,pattern,serial_location,model_location):
 	target = args.target
 	filenames = glob.glob(dir_name+pattern)
 	print(dir_name+pattern)
@@ -60,19 +60,22 @@ def melt_instance(args,dir_name,pattern,location):
 			#	break
 			#print('found one!')
 
-			serial_number = line[location]
-			if re.findall(name_pat,serial_number):
+			serial_number = line[serial_location]
+			model_number = line[model_location]
+			name = model_number+"_"+serial_number
+			name = name.replace(" ","")
+			if re.findall(name_pat,name):
 				#print(serial_number)
 				#print(target+serial_number+'.csv')
-				f = open(target+serial_number+'.csv','a')
+				f = open(target+name+'.csv','a')
 				f.write(pp.write_line(line + [args.linesep],args.elemsep))
 				f.close()
 
 				fail_location = 4 # column where failure is reported
 				if line[fail_location] == '1':
-					os.rename(target+serial_number+'.csv',target+serial_number+'_fail.csv')
+					os.rename(target+name+'.csv',target+name+'_fail.csv')
 			else:
-				print(serial_number)
+				pass #print(name)
 
 def main(args):
 	filename = args.filename
@@ -209,15 +212,16 @@ def main(args):
 				data = X
 				gt = Y
 
-			return data,explanations,names
+			return data,gt,explanations,names
 			
 	elif datatype == "INSTANCE":
 		pattern = '[0-9-]*.csv'
 		#pattern = args.pattern
 		#serial_number = "MJ0351YNG9Z0XA"
-		location = 1
+		serial_location = 1
+		model_location = 2
 
-		melt_instance(args,filename,pattern,location)	
+		melt_instance(args,filename,pattern,serial_location,model_location)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
