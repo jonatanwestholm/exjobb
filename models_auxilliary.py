@@ -77,6 +77,17 @@ def overlap(int1,int2):
 
 	return common/ltot
 
+def cumulative_singular_values(S,plot=False):
+	S_energy = np.cumsum(S)
+	S_energy = S_energy/S_energy[-1]
+	if plot:
+		plt.plot(S_energy)
+		plt.title("Cumulative singular values")
+		plt.xlabel("Singular value")
+		plt.ylabel("Cumulative relative singular values")
+		plt.show()
+
+	return S_energy
 
 def ESN_A(architecture,N,r=0.5,b=0.05):
 

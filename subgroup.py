@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import glob
 import copy
 
+import settings
 import subgroup_auxilliary as aux
 import preprocessing as pp
 import sim
@@ -15,6 +16,7 @@ import models as Models
 import nasa
 import backblaze
 import occupancy
+import dodgers
 
 # auxilliary
 
@@ -37,6 +39,8 @@ def fetch(args):
 		data,gt,explanations,names = backblaze.main(args)
 	elif dataset == "OCCUPANCY":
 		data,gt,explanations,names = occupancy.main(args)
+	elif dataset == "DODGERS":
+		data,gt,explanations,names = dodgers.main(args)
 	#elif dataset == "ARMA_SIM":
 	#	data = sim.arma_sim(np.array([1]),np.array([1,0.5,-0.2]),1000,num=5)
 	elif dataset == "VARMA_SIM":
@@ -189,12 +193,15 @@ def train(train_data,train_gt,subgroup,train_type,args):
 
 	elif train_type == "SVM":
 		mod = Models.SVM_TS(subgroup,args.settings["pos_w"],test_type)
-
 		for x,y in zip(train_data,train_gt):
 			mod.charge(x,y)
-
 		mod.train()
-
+		mods = [mod]
+	elif train_type == "MLP":
+		mod = Models.MLP_TS(subgroup,test_type)
+		for x,y in zip(train_data,train_gt):
+			mod.charge(x,y)
+		mod.train()
 		mods = [mod]
 
 	return mods
@@ -242,7 +249,7 @@ def test(train_data,test_data,models,args):
 				aux.reset_models(models)
 				pred.append(aux.predict_data(test_dat,models,k))
 
-	elif test_type == "CLASSIFICATION":
+	elif test_type in ["CLASSIFICATION","REGRESSION"]:
 		mod = models[0]
 		for test_dat in test_data:
 			mod.reset()
@@ -289,7 +296,7 @@ def evaluate(pred,gt,evaluate_on,args):
 
 			j+=1
 
-	elif test_type == "CLASSIFICATION":
+	elif test_type in ["CLASSIFICATION","REGRESSION"]:
 		GG_all = 0
 		PG_all = 0
 		PP_all = 0
@@ -350,47 +357,18 @@ def subgroup_score(train_data,test_data,gt,sub_col,args):
 
 	return score 
 
-# alters models depending on what has become known with the new mod
-def subgroup_select(mod,models,args):
-	return False
-
 ## Main
 
 # example:
 # spec = {"DIRECT": None,"VAR": {"p": 5}, "RODAN": {"N": 200}, "THRES": {"random_thres": True, "N": 20}}
 
-def settings(args):
-	num_series = 10
+def set_settings(args):
+	if args.config:
+		config = args.config
+	else:
+		config = args.dataset
 
-	settings = {"min_subgroup_length": 3, "max_subgroup_length": 6, "subgroup_length": 3, # general
-				"lincorr_lag": 5, # candidate generation
-				"VARMA_p": 2, "VARMA_q": 0, "ARMA_q": 2, # VARMA orders
-				"re_series": np.logspace(-1,-6,num_series), "rw_series": 500*np.logspace(0,-1,num_series), # VARMA training
-				"num_timepoints": 1000, "num_samples": 10, "case": "case1", # VARMA sim
-				"train_share": 0.4, "test_share": 0.6, # splitting
-				"failure_horizon": 20, "pos_w": 2, # classification and regression
-				#"A_architecture": "DLR", "B_architecture": "SECTIONS", "C_architecture": "SELECTED", "f_architecture": "TANH", # ESN
-				#"ESN_size_state": 500, 
-				"ESN_spec": [#("RODAN", {"N": 500,"v":0}),
-							("RODAN",{"N":200,"v":1}),
-							#("VAR", {"p": 10}),
-							("THRES", {"N": 200,"random_thres":True,"direct_input":True}),
-							#("TRIGGER", {"N": 500,"random_thres": True,"direct_input":True}),
-							#("LEAKY", {"N": 200, "r": 0.8,"v":1}),
-							("HEIGHTSENS", {"N": 500, "random_thres": True}),
-							("DIRECT",None),
-							],
-				"ESN_size_out": 20, # ESN
-				"ESN_burn_in": 10,"ESN_batch_train" : True,"ESN_tikhonov_const": 10,  # ESN training
-				"ESN_sim_case": "trigger_waves", # ESN sim
-				"ESN_mixing": [("TRIGGER","RODAN",200), ("THRES","RODAN",100), ("RODAN","TRIGGER",200), ("RODAN","THRES",100),
-							   ("THRES","VAR",1), ("VAR","TRIGGER",1), ("LEAKY","TRIGGER",20), ("THRES","LEAKY",50), ("LEAKY","RODAN",100),
-							   ("HEIGHTSENS","HEIGHTSENS",1),("HEIGHTSENS","LEAKY",200),("RODAN","HEIGHTSENS",200)],
-				"ESN_rebuild_types": ["THRES","TRIGGER"], "ESN_rebuild_iterations": 1, "ESN_impact_limit": 1e-2,
-				"ESN_classifier": "MLP", "ESN_sig_limit": 0.1
-				}
-
-	args.settings = settings
+	args.settings = settings.settings[config]
 
 def subgroup(data,gt,args):
 	train_data,train_gt,test_data,test_gt,train_names,test_names = pp.split(data,gt,
@@ -417,15 +395,6 @@ def subgroup(data,gt,args):
 	#for cand in cands:
 	#	print(cand)
 
-	if 0:
-		legends = []
-		print(args.explanations)
-		for feature in [1,2,5]:
-			plt.plot(data[0][:,feature])
-			legends.append(args.explanations[feature])
-		plt.legend(legends)
-		plt.show()
-
 	for cand in cands:
 		print(cand)
 		for model in [args.model]:
@@ -448,7 +417,7 @@ def subgroup(data,gt,args):
 	
 	
 def main(args):
-	settings(args)
+	set_settings(args)
 	data,gt = fetch(args)
 
 	# subgroup learning
@@ -461,6 +430,7 @@ if __name__ == '__main__':
 	parser.add_argument('-p','--pattern',dest = 'pattern',default="",help='Input file pattern (regex)')
 	parser.add_argument('-a','--datatype',dest = 'datatype',default="SEQUENTIAL",help='Type of data (e.g. SEQUENTIAL,INSTANCE,LAYERED)')
 	parser.add_argument('-d','--dataset',dest = 'dataset',default="",help='Pick dataset (e.g. TURBOFAN,IGBT,BEARING,MILL)')
+	parser.add_argument('--config',dest = 'config',default="",help='Config to use for models')
 	parser.add_argument('--case',dest = 'case',default=1,help='Case to investigate (Mill)')
 	parser.add_argument('-c','--readlines',dest = 'readlines',default="all",help='Number of lines to read')
 	parser.add_argument('-e','--elemsep',dest = 'elemsep',default='\t',help='Element Separator')

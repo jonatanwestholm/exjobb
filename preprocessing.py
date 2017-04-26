@@ -55,6 +55,9 @@ def filter_wrt(data,key,value):
 def filter_wrt_function(data,condition):
 	return [dat for dat in data if condition(dat)]
 
+def just_the_names(filenames):
+	return [filename.split('/')[-1] for filename in filenames]
+
 ## Mathematical operations
 
 def differentiate(data):
@@ -63,10 +66,34 @@ def differentiate(data):
 def smooth(data,length):
 	C = np.array([1]*length)/length
 	A = 1
-	return [ssignal.filtfilt(C,A,dat.T).T for dat in data]
+	return [ssignal.lfilter(C,A,dat.T).T for dat in data]
 
 def filter(data,C,A):
-	return [ssignal.lfilter(C,A,dat.T).T for dat in data]	
+	return [ssignal.lfilter(C,A,dat.T).T for dat in data]
+
+def sin_signal(num,period):
+	signal = np.linspace(0,num,num+1)[:-1]
+	signal = signal*2*np.pi/period
+	signal = np.sin(signal)
+	signal = signal.reshape([num,1])
+	return signal
+
+def cos_signal(num,period):
+	signal = np.linspace(0,num,num+1)[:-1]
+	signal = signal*2*np.pi/period
+	signal = np.cos(signal)
+	signal = signal.reshape([num,1])
+	return signal
+
+def remove_harmonic_trend(dat,T):
+	N = len(dat)
+	X = np.ones([N,3])
+	X[:,1] = np.ravel(sin_signal(N,T))
+	X[:,2] = np.ravel(cos_signal(N,T))
+
+	theta = np.linalg.lstsq(X,dat)[0]
+
+	return dat - np.dot(X,theta)
 
 def normalize(dat,return_mean_max=False,leave_zero=False):
 	dat_mean = [np.mean(feat) for feat in dat.T]

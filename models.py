@@ -230,10 +230,17 @@ class ESN(MTS_Model):
 
 		self.learners = None
 		if self.classifier == "MLP":
-			self.sv = MLPClassifier(solver='lbfgs', alpha=1e-5,
-                    			hidden_layer_sizes=(5), random_state=1)
+			if self.purpose == "REGRESSION":
+				self.sv = MLPRegressor(solver='lbfgs', alpha=1e-5,
+    	                			hidden_layer_sizes=(5), random_state=1)
+			elif self.purpose == "CLASSIFICATION":
+				self.sv = MLPClassifier(solver='lbfgs', alpha=1e-5,
+    	                			hidden_layer_sizes=(5), random_state=1)
 		elif self.classifier == "SVM":
-			self.sv = svm.SVR()			
+			if self.purpose == "REGRESSION":
+				self.sv = svm.SVR()
+			elif self.purpose == "CLASSIFICATION":
+				self.sv = svm.SVC()
 
 		self.reset()
 
@@ -284,15 +291,12 @@ class ESN(MTS_Model):
 
 	def train_Cs(self,X):
 		__,S,V = np.linalg.svd(X,full_matrices=False)
-		'''
-		S_energy = np.cumsum(S)
-		S_energy = S_energy/S_energy[-1]
-		plt.plot(S_energy)
-		plt.title("Cumulative singular values")
-		plt.xlabel("Singular value")
-		plt.ylabel("Cumulative relative singular values")
-		plt.show()
-		'''
+		
+		mod_aux.cumulative_singular_values(S)
+
+		#V = S*V
+		#V = V[:V.shape[1],:]
+
 		self.Cs = V[:self.Oh,:]
 		#self.Cs = np.eye(self.Oh)
 
@@ -437,7 +441,7 @@ class ESN(MTS_Model):
 		return y
 
 	def predict(self,k=1,U=[]):
-		if self.purpose == "CLASSIFICATION":
+		if self.purpose in ["CLASSIFICATION","REGRESSION"]:
 			#U = np.zeros([self.M,1])
 			if mod_aux.is_tensor(U,self.M>1):
 				X = self.update_private(U,self.X,k-1,noise=False)
@@ -449,6 +453,8 @@ class ESN(MTS_Model):
 					y.append(self.predict(k,u))
 					self.update(u)
 				y = np.concatenate(y,axis=0)
+				if self.purpose == "CLASSIFICATION":
+					y = y > 0.5
 		elif self.purpose == "PREDICTION":
 			X = self.X
 			for i in range(k-1):
@@ -510,6 +516,43 @@ class SVM_TS:
 		#	self.sv.fit(self.X,np.ravel(self.y))
 		if return_score:
 			return self.sv.score(self.X,np.ravel(self.y),np.ravel(self.w))
+
+	def predict(self,U):
+		return self.sv.predict(U)
+
+class MLP_TS:
+	def __init__(self,subgroup,purpose):
+		self.subgroup = subgroup
+		self.purpose = purpose
+		self.initiate()
+
+	def initiate(self):
+		self.X = np.array([[]]*len(self.subgroup)).T
+		self.y = np.array([[]]).T
+		self.w = np.array([[]]).T 
+		if self.purpose == "REGRESSION":
+			self.sv = MLPRegressor(solver='lbfgs', alpha=1e-5,
+	                			hidden_layer_sizes=(5), random_state=1)
+		elif self.purpose == "CLASSIFICATION":
+			self.sv = MLPClassifier(solver='lbfgs', alpha=1e-5,
+	                			hidden_layer_sizes=(5), random_state=1)
+		#elif self.style == "MLP":
+		#	self.sv = MLPClassifier(solver='lbfgs', alpha=1e-5,
+        #	           				hidden_layer_sizes=(10,3), random_state=1)
+
+	def reset(self):
+		pass
+
+	def charge(self,X,y):
+		self.X = np.concatenate([self.X,X])
+		self.y = np.concatenate([self.y,y])
+		
+	def train(self,return_score=False):
+		self.sv.fit(self.X,np.ravel(self.y))
+		#else:
+		#	self.sv.fit(self.X,np.ravel(self.y))
+		if return_score:
+			return self.sv.score(self.X,np.ravel(self.y))
 
 	def predict(self,U):
 		return self.sv.predict(U)
