@@ -307,13 +307,14 @@ def predict_data(dat,models,k):
 
 # Visualization
 
-def classification_plot(pred,gt):
-	for pred_arr,gt_arr in zip(pred,gt):
+def classification_plot(pred,gt,names):
+	for pred_arr,gt_arr,name in zip(pred,gt,names):
 		length = 1
 		pred_arr = pp.filter([pred_arr],np.array([1]*length)/length,np.array([1]))[0]
 		#print(pred_arr)
 
-		plt.figure()
+		#plt.figure()
+		plt.title(name)
 		plt.plot(pred_arr,'b')
 		plt.plot(gt_arr,'r')
 		plt.axis([0,len(pred_arr), min(gt_arr)-0.1,max(gt_arr)+0.1])

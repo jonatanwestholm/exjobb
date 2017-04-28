@@ -170,7 +170,10 @@ def train(train_data,train_gt,subgroup,train_type,args):
 		tikho = args.settings["ESN_tikhonov_const"]
 		purpose = args.test_type
 		pos_w = args.settings["pos_w"]
+		#sig_limit = args.settings["ESN_sig_limit"]
+		selection = args.settings["ESN_feature_selection"]
 		classifier = args.settings["ESN_classifier"]
+		explanations = args.explanations
 
 		if test_type == "PREDICTION":
 			L = N
@@ -178,7 +181,7 @@ def train(train_data,train_gt,subgroup,train_type,args):
 			L = 1
 		orders = [N,size_out,L]
 
-		mod = Models.ESN(purpose,orders,spec,mixing,pos_w,args.settings["ESN_sig_limit"],args.settings["ESN_classifier"],args.explanations)
+		mod = Models.ESN(purpose,orders,spec,mixing,pos_w,selection,classifier,explanations)
 		mod.subgroup = subgroup
 
 		if test_type == "PREDICTION":
@@ -187,7 +190,7 @@ def train(train_data,train_gt,subgroup,train_type,args):
 		for x,y in zip(train_data,train_gt):
 			mod.charge(x,y)
 
-		mod.train(tikho)
+		X_res = mod.train(tikho)
 
 		mods = [mod]
 
@@ -320,7 +323,7 @@ def evaluate(pred,gt,evaluate_on,args):
 		print("Total. spec: {0:.3f} prec: {1:.3f}, am: {2:.3f}, hm: {3:.3f}".format(spec,prec,am,hm))
 			
 		if args.plot:
-			aux.classification_plot(pred,gt)
+			aux.classification_plot(pred,gt,args.names)
 
 	elif test_type == "REGRESSION":
 		pass		
@@ -377,8 +380,9 @@ def subgroup(data,gt,args):
 																			test_share=args.settings["test_share"],
 																			names=args.names,
 																			return_names=True)
-	#test_data = train_data
-	#test_names = train_names
+	test_data = train_data
+	test_gt = train_gt
+	test_names = train_names
 
 	args.train_names = train_names
 	args.test_names = test_names

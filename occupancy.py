@@ -24,7 +24,8 @@ def main(args):
 		filenames = glob.glob(filename+pattern)
 		names = just_the_names(filenames)
 		#print(filename+pattern)
-		print(filenames)
+		#print(sorted(filenames,reverse=False))
+		print(sorted(filenames,reverse=True))
 
 		feature_idxs = [2,3,4,5,6]
 		gt_idx = [7]

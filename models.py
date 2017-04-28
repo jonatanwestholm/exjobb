@@ -203,10 +203,10 @@ class VARMA(MTS_Model):
 
 class ESN(MTS_Model):
 
-	def __init__(self,purpose,orders,spec,mixing,pos_w,sig_limit,classifier,explanations):
+	def __init__(self,purpose,orders,spec,mixing,pos_w,selection,classifier,explanations):
 		self.purpose = purpose
 		self.pos_w = pos_w
-		self.sig_limit = sig_limit
+		self.selection = selection
 		self.classifier = classifier
 		self.explanations = explanations
 		size_in,size_out,size_label = orders
@@ -289,16 +289,36 @@ class ESN(MTS_Model):
 
 		return self.X
 
-	def train_Cs(self,X):
-		__,S,V = np.linalg.svd(X,full_matrices=False)
-		
-		mod_aux.cumulative_singular_values(S)
+	def train_Cs(self,X,Y):
+		if self.selection == "SIG_NODES":
+			sig = mod_aux.significant_nodes(X,Y)
+			sig_nodes = [i[0] for i in sorted(enumerate(sig), key=lambda x:x[1])]
+			self.sig_nodes = sig_nodes[:self.Oh]
+			self.reservoir.print_significant(sig,self.sig_nodes)
+			#self.sig_nodes = np.where(sig < self.sig_limit)[0]
 
-		#V = S*V
-		#V = V[:V.shape[1],:]
+			#print(sig[self.sig_nodes])
+			#X = X[:,self.sig_nodes]
+			#self.Oh = len(self.sig_nodes)
+			print("{0:d} significant nodes".format(len(self.sig_nodes)))
 
-		self.Cs = V[:self.Oh,:]
-		#self.Cs = np.eye(self.Oh)
+		elif self.selection == "SVD":
+			self.Cs = mod_aux.fit_svd(X,self.Oh)
+
+		elif self.selection == "SVD_SEP":
+			X_pos = X[np.where(Y==1)[0],:]
+			X_neg = X[np.where(Y==0)[0],:]
+			self.Cs = mod_aux.fit_svd_sep(X_pos,X_neg,self.Oh)
+
+		elif self.selection == "K_MEANS":
+			X_pos = X[np.where(Y==1)[0],:]
+			X_neg = X[np.where(Y==0)[0],:]
+			num = int(self.Oh/2)
+			self.kmeans_pos,self.kmeans_neg = mod_aux.fit_kmeans(X_pos,X_neg,num)
+
+		elif self.selection == "AUTOENCODER":
+			pass
+
 
 	def train_Cw(self,Xs,Y,W=[],tikho=0):
 		if self.classifier == "LINEAR":
@@ -359,31 +379,8 @@ class ESN(MTS_Model):
 		#print(X.shape)
 		Y = np.concatenate(self.outputs,axis=0)
 
-
-		sig = mod_aux.significant_nodes(X,Y)
-		self.reservoir.print_significant(sig,self.sig_limit)
-		self.sig_nodes = np.where(sig < self.sig_limit)[0]
-
-		#print(sig[self.sig_nodes])
-		X = X[:,self.sig_nodes]
-		if len(self.sig_nodes) < self.Oh:
-			self.Oh = len(self.sig_nodes)
-		print("{0:d} significant nodes".format(len(self.sig_nodes)))
-		#print(Y.shape)
-		#print(X[:5,:])
-		#print(X[-5:,:])
-		#x = np.log(X-np.min(X)+0.1)
-		#x = np.ravel(x)
-		
-		x = copy.deepcopy(X)
-		print("Node activations. min: {0:.3f}, max: {1:.1f}, mean: {2:.1f}, std: {3:.3f}".format(np.min(x),np.max(x),np.mean(x),np.std(x)))
-		for i in range(x.shape[0]):
-			for j in range(x.shape[1]):
-				if x[i,j] < -2 or x[i,j] > 2:
-					x[i,j] = 0		
-
-		self.train_Cs(X)
-		Xs = np.dot(X,self.Cs.T)
+		self.train_Cs(X,Y)
+		Xs,X_res = self.reduce(X,return_score=True)
 
 		#print(sorted([0]))
 		if self.classifier == "LINEAR":
@@ -393,8 +390,8 @@ class ESN(MTS_Model):
 			#self.node_max_impact = node_impact
 			#print(node_impact.shape)
 			#print(np.max(np.abs(X),axis=0).shape)
-			node_impact = np.dot(self.Cw[:,1:],self.Cs)
-			self.node_max_impact = np.abs(node_impact*np.max(np.abs(X),axis=0).T)
+			#node_impact = np.dot(self.Cw[:,1:],self.Cs)
+			#self.node_max_impact = np.abs(node_impact*np.max(np.abs(X),axis=0).T)
 		elif self.classifier == "MLP":
 			self.train_Cw(Xs,Y)
 		elif self.classifier == "SVM":
@@ -402,6 +399,7 @@ class ESN(MTS_Model):
 			self.train_Cw(Xs,Y,W=W)
 
 		#self.plot_activations()
+		return X_res
 		
 	def plot_activations(self):
 		X = np.concatenate(self.inputs,axis=0)
@@ -425,13 +423,62 @@ class ESN(MTS_Model):
 		axarr[1].scatter(none_idx,[0]*len(none_idx),color='r',marker='*',s=20)
 		axarr[1].legend(self.explanations,loc="upper left",bbox_to_anchor=(1,1))
 
-		plt.show()		
+		plt.show()
+
+	def reduce(self,X,return_score=False):
+		if mod_aux.is_tensor(X,1):
+			X = X.T
+
+		if self.selection == "SIG_NODES":
+			Xs = X[:,self.sig_nodes]
+
+		elif self.selection in ["SVD","SVD_SEP"]:
+			Xs = np.dot(X,self.Cs.T)
+
+			if self.selection == "SVD":
+				X_res = X - np.dot(Xs,self.Cs)
+				X_res = np.linalg.norm(X_res,axis=1)
+				X_res = X_res/np.linalg.norm(X,axis=1)
+				plt.plot(X_res,'g')
+
+			elif self.selection == "SVD_SEP":
+				num = int(self.Oh/2)
+				Cs_pos = self.Cs[:num,:]
+				Cs_neg = self.Cs[num:,:]
+
+				X_res_pos = X - np.dot(np.dot(X,Cs_pos.T),Cs_pos)
+				X_res_neg = X - np.dot(np.dot(X,Cs_neg.T),Cs_neg)
+
+				X_res_pos = np.linalg.norm(X_res_pos,axis=1)
+				X_res_pos = X_res_pos/np.linalg.norm(X,axis=1)
+
+				X_res_neg = np.linalg.norm(X_res_neg,axis=1)
+				X_res_neg = X_res_neg/np.linalg.norm(X,axis=1)
+
+				plt.plot(X_res_pos,'g')
+				plt.plot(X_res_neg,'m')
+
+				X_res = 0
+
+
+		elif self.selection == "K_MEANS":
+			Xs_pos = self.kmeans_pos.transform(X)
+			Xs_neg = self.kmeans_neg.transform(X)
+
+			Xs = np.concatenate([Xs_pos,Xs_neg],axis=1)
+
+		if mod_aux.is_tensor(X,1):
+			Xs = Xs.T
+
+		if return_score:
+			return Xs,X_res
+		else:
+			return Xs
 
 	def out(self,X=[]):
 		if X == []:
 			X = self.X
-		X = X[self.sig_nodes]
-		Xs = np.dot(self.Cs,X)
+		Xs = self.reduce(X)
 		if self.classifier == "LINEAR":
 			Xs = np.concatenate([np.array([[1]]),Xs])
 			y = np.dot(self.Cw,Xs)
@@ -450,8 +497,9 @@ class ESN(MTS_Model):
 				# note that the prediction changes the state 
 				y = []
 				for u in U:
-					y.append(self.predict(k,u))
+					#y.append(self.predict(k,u))
 					self.update(u)
+					y.append(self.out())
 				y = np.concatenate(y,axis=0)
 				if self.purpose == "CLASSIFICATION":
 					y = y > 0.5

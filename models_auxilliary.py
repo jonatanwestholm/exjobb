@@ -4,6 +4,7 @@
 import numpy as np
 from scipy import sparse
 import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
 
 esn_component_sizes = {"VAR":1,"RODAN":1,"DIRECT":1,"THRES":2,"TRIGGER":3}
 
@@ -43,7 +44,8 @@ def significance_test(x1,x2):
 	std1 = np.std(x1)
 	std2 = np.std(x2)
 
-	return overlap([mean1-2*std1,mean1+2*std1],[mean2-2*std2,mean2+2*std2])
+	quant = 3
+	return overlap([mean1-quant*std1,mean1+quant*std1],[mean2-quant*std2,mean2+quant*std2])
 
 def overlap(int1,int2):
 	#print(int1)
@@ -76,6 +78,36 @@ def overlap(int1,int2):
 	common = int1[1]-int2[0]
 
 	return common/ltot
+
+def fit_svd(X,num,plot=False):	
+	__,S,V = np.linalg.svd(X,full_matrices=False)
+	
+	cumulative_singular_values(S,plot)
+
+	return V[:num,:]
+
+def fit_svd_sep(X_pos,X_neg,num,plot=False):
+	num = int(num/2)
+	Cs_pos = fit_svd(X_pos,num,plot)
+	Cs_neg = fit_svd(X_neg,num,plot)
+
+	return np.concatenate([Cs_pos,Cs_neg],axis=0)
+
+def fit_kmeans(X_pos,X_neg,num):
+	
+	pos = KMeans(n_clusters=num).fit(X_pos)
+	neg = KMeans(n_clusters=num).fit(X_neg)
+
+	pos_centers = pos.cluster_centers_
+	neg_centers = neg.cluster_centers_
+	
+	print(pos_centers)
+	print(neg_centers)
+	
+	#kmeans = KMeans(n_clusters=num).fit(X)
+	#print(kmeans.cluster_centers_)
+
+	return pos,neg
 
 def cumulative_singular_values(S,plot=False):
 	S_energy = np.cumsum(S)
@@ -629,8 +661,8 @@ class Reservoir:
 				line += " ".join(["({0:d},{1:.2f})".format(other.input_idx,weight) for other,weight in node.outputs]) + " -->"
 				print(line)
 
-	def print_significant(self,sig,sig_limit):
-		sig_nodes = np.where(sig < sig_limit)[0]
+	def print_significant(self,sig,sig_nodes):
+		#sig_nodes = np.where(sig <= sig_limit)[0]
 		i = 0
 		node_idx = sig_nodes[i]
 		#print(sig_nodes)
@@ -640,11 +672,14 @@ class Reservoir:
 		for comp in self.components:
 			#print(comp.get_typename())
 			#print(comp.get_output_idx())
+			idxs = list(range(comp.input_idx,comp.get_output_idx()))
+			covered = [node_idx for node_idx in sig_nodes if node_idx in idxs]
 		
-			if comp.get_output_idx() >= node_idx:
+			if len(covered):
 				print("{0:s}: ".format(comp.get_typename()))
 			
-			sigs = []
+			sigs = [sig[idx] for idx in covered]
+			'''
 			while comp.get_output_idx() >= node_idx:
 				#print("{0:s}: {1:.3f}".format(comp.get_typename(),sig[node_idx]))
 				sigs.append(sig[node_idx])
@@ -653,6 +688,7 @@ class Reservoir:
 					node_idx = sig_nodes[i]
 				except IndexError:
 					node_idx = self.total_size()
+			'''
 
 			if sigs != []:
 				print(np.array(sigs))
