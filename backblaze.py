@@ -205,7 +205,7 @@ def main(args):
 				Y = []
 				failed = ["_fail" in name for name in names]
 
-				for x,y in pp.impending_failure(data,failed,args.settings["failure_horizon"],args.test_type):
+				for x,y in pp.impending_failure(data,failed,args.settings["failure_horizon"],"CLASSIFICATION"):
 					X.append(x)
 					Y.append(y)
 

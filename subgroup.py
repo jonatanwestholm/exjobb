@@ -380,9 +380,9 @@ def subgroup(data,gt,args):
 																			test_share=args.settings["test_share"],
 																			names=args.names,
 																			return_names=True)
-	test_data = train_data
-	test_gt = train_gt
-	test_names = train_names
+	#test_data = train_data
+	#test_gt = train_gt
+	#test_names = train_names
 
 	args.train_names = train_names
 	args.test_names = test_names

@@ -313,7 +313,7 @@ def classification_plot(pred,gt,names):
 		pred_arr = pp.filter([pred_arr],np.array([1]*length)/length,np.array([1]))[0]
 		#print(pred_arr)
 
-		#plt.figure()
+		plt.figure()
 		plt.title(name)
 		plt.plot(pred_arr,'b')
 		plt.plot(gt_arr,'r')

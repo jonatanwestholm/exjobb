@@ -23,29 +23,48 @@ def is_tensor(X,order=2):
 	else:
 		return False
 
-def significant_nodes(X,Y):
+def normalize_corr_mat(dep):
+	#autoprecisions = forgiving_inv(np.diag(dep))
+	autocorr = np.sqrt(np.diag(1/np.diag(dep)))
+	#print_mat(autocorr)
+	return np.dot(autocorr,np.dot(dep,autocorr))
+
+def significant_nodes(X,Y,plot=False):
 	Y = Y-np.min(Y)
 	Y = Y/np.max(Y)
-	sig = []
+	sigs = []
+	seps = []
 	for feat in X.T:
 		pos = feat[np.where(Y==1)[0]]
 		neg = feat[np.where(Y==0)[0]]
 
-		sig.append(significance_test(pos,neg))
+		if plot:
+			#plt.scatter(neg,np.zeros_like(neg),color='b')
+			#plt.scatter(pos,np.zeros_like(pos),color='r')
+			plt.hist([pos,neg],50)
+			plt.show()
 
-	sig = np.array(sig)
+		sig,sep = significance_test(pos,neg)
+		sigs.append(sig)
+		seps.append(sep)
+
+	sigs = np.array(sigs)
+	seps = np.array(seps)
 	#print(sig)
-	return sig
+	return sigs,seps
 
 def significance_test(x1,x2):
+
 	mean1 = np.mean(x1)
 	mean2 = np.mean(x2)
 
 	std1 = np.std(x1)
 	std2 = np.std(x2)
 
-	quant = 3
-	return overlap([mean1-quant*std1,mean1+quant*std1],[mean2-quant*std2,mean2+quant*std2])
+	sep = (mean1*std2+mean2*std1)/(std1+std2)
+
+	quant = 2
+	return overlap([mean1-quant*std1,mean1+quant*std1],[mean2-quant*std2,mean2+quant*std2]),sep
 
 def overlap(int1,int2):
 	#print(int1)
@@ -82,7 +101,8 @@ def overlap(int1,int2):
 def fit_svd(X,num,plot=False):	
 	__,S,V = np.linalg.svd(X,full_matrices=False)
 	
-	cumulative_singular_values(S,plot)
+	if plot:
+		cumulative_singular_values(S,True)
 
 	return V[:num,:]
 
@@ -101,13 +121,32 @@ def fit_kmeans(X_pos,X_neg,num):
 	pos_centers = pos.cluster_centers_
 	neg_centers = neg.cluster_centers_
 	
-	print(pos_centers)
-	print(neg_centers)
+	#print(pos_centers)
+	#print(neg_centers)
 	
 	#kmeans = KMeans(n_clusters=num).fit(X)
 	#print(kmeans.cluster_centers_)
 
 	return pos,neg
+
+def color_ranking(X,Y):
+	num = int(X.shape[1]/2)
+
+	Rank = []
+	for i,row in enumerate(X):
+		row_rank = [i[0] for i in sorted(enumerate(row), key=lambda x:x[1])]
+		row_rank = [int(elem < num) for elem in row_rank]
+		Rank.append(row_rank)
+
+	Rank = np.array(Rank)
+	#print(Rank)
+
+	spacing = 0.5*np.ones_like(Y)
+
+	Rank = np.concatenate([Y,spacing,Rank],axis=1)
+
+	plt.imshow(Rank,interpolation='none',aspect='auto')
+	plt.show()
 
 def cumulative_singular_values(S,plot=False):
 	S_energy = np.cumsum(S)
@@ -689,10 +728,8 @@ class Reservoir:
 				except IndexError:
 					node_idx = self.total_size()
 			'''
-
 			if sigs != []:
 				print(np.array(sigs))
-
 
 # helps with learning
 # an object whose states is the weights of other models

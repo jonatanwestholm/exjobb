@@ -291,10 +291,15 @@ class ESN(MTS_Model):
 
 	def train_Cs(self,X,Y):
 		if self.selection == "SIG_NODES":
-			sig = mod_aux.significant_nodes(X,Y)
+			sig,sep = mod_aux.significant_nodes(X,Y)
 			sig_nodes = [i[0] for i in sorted(enumerate(sig), key=lambda x:x[1])]
 			self.sig_nodes = sig_nodes[:self.Oh]
+			#print(self.sig_nodes)
+			#print(sep)
+			self.sep = sep[self.sig_nodes]
 			self.reservoir.print_significant(sig,self.sig_nodes)
+
+			#mod_aux.significant_nodes(X[:,self.sig_nodes],Y,plot=True)
 			#self.sig_nodes = np.where(sig < self.sig_limit)[0]
 
 			#print(sig[self.sig_nodes])
@@ -315,6 +320,12 @@ class ESN(MTS_Model):
 			X_neg = X[np.where(Y==0)[0],:]
 			num = int(self.Oh/2)
 			self.kmeans_pos,self.kmeans_neg = mod_aux.fit_kmeans(X_pos,X_neg,num)
+
+
+			Xs_pos = self.kmeans_pos.transform(X)
+			Xs_neg = self.kmeans_neg.transform(X)
+			Xs = np.concatenate([Xs_pos,Xs_neg],axis=1)
+			mod_aux.color_ranking(Xs,Y)
 
 		elif self.selection == "AUTOENCODER":
 			pass
@@ -431,6 +442,18 @@ class ESN(MTS_Model):
 
 		if self.selection == "SIG_NODES":
 			Xs = X[:,self.sig_nodes]
+			Xs = Xs - self.sep
+
+			if return_score:
+				#mod_aux.fit_svd(Xs,5,plot=True)
+				Xp = Xs - np.dot(np.ones([1,Xs.shape[1]]),np.mean(Xs,axis=0).reshape([Xs.shape[1],1]))
+				
+				dep = np.dot(Xp.T,Xp)
+				corr = mod_aux.normalize_corr_mat(dep)
+				for row in corr:
+					print(" ".join(["{0:.3f}".format(elem) for elem in row]))
+				
+			X_res = 0
 
 		elif self.selection in ["SVD","SVD_SEP"]:
 			Xs = np.dot(X,self.Cs.T)
@@ -460,12 +483,31 @@ class ESN(MTS_Model):
 
 				X_res = 0
 
-
 		elif self.selection == "K_MEANS":
 			Xs_pos = self.kmeans_pos.transform(X)
 			Xs_neg = self.kmeans_neg.transform(X)
-
 			Xs = np.concatenate([Xs_pos,Xs_neg],axis=1)
+
+			'''
+			if return_score:
+				for row in np.concatenate([Xs_pos,Xs_neg],axis=1):
+					print(" ".join(["{0:.3f}".format(elem) for elem in row]))
+			'''
+
+			'''
+			Xs = np.concatenate([Xs_pos,Xs_neg],axis=1)
+			X_single = np.zeros_like(Xs)
+			for row_s,row_single in zip(Xs,X_single):
+				row_single[np.argmin(row_s)] = 1
+
+			if return_score:
+				for row in X_single: #np.concatenate([Xs_pos,Xs_neg],axis=1):
+					print(" ".join(["{0:.3f}".format(elem) for elem in row]))
+
+			Xs = X_single
+			'''
+
+			X_res = 0
 
 		if mod_aux.is_tensor(X,1):
 			Xs = Xs.T
