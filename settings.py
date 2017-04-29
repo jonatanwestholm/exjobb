@@ -63,12 +63,12 @@ occupancy = {"train_share": 0.4, "test_share": 0.4, # splitting
 						#("HEIGHTSENS", {"N": 200, "random_thres": True}),
 						#("DIRECT",None),
 						],
-			"ESN_size_out": 20, # ESN
+			"ESN_size_out": 10, # ESN
 			"ESN_burn_in": 10,"ESN_batch_train" : True,"ESN_tikhonov_const": 10,  # ESN training
 			"ESN_sim_case": "trigger_waves", # ESN sim
 			"ESN_mixing": [("RODAN","RODAN",200)],
 			#"ESN_rebuild_types": ["THRES","TRIGGER"], "ESN_rebuild_iterations": 1, "ESN_impact_limit": 1e-2,
-			"ESN_feature_selection": "K_MEANS",
+			"ESN_feature_selection": "SVD",
 			"ESN_classifier": "LINEAR" #, "ESN_sig_limit": 0.1,
 			}
 

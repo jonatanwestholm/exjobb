@@ -488,24 +488,27 @@ class ESN(MTS_Model):
 			Xs_neg = self.kmeans_neg.transform(X)
 			Xs = np.concatenate([Xs_pos,Xs_neg],axis=1)
 
+			#print(Xs)
+			Xs = 1/(1+Xs)
+
 			'''
 			if return_score:
 				for row in np.concatenate([Xs_pos,Xs_neg],axis=1):
 					print(" ".join(["{0:.3f}".format(elem) for elem in row]))
-			'''
+			
 
-			'''
-			Xs = np.concatenate([Xs_pos,Xs_neg],axis=1)
 			X_single = np.zeros_like(Xs)
-			for row_s,row_single in zip(Xs,X_single):
-				row_single[np.argmin(row_s)] = 1
+			for j,row in enumerate(Xs):
+				nearest = [i[0] for i in sorted(enumerate(row), key=lambda x:x[1])]
+				X_single[j,nearest[:3]] = 1
 
-			if return_score:
-				for row in X_single: #np.concatenate([Xs_pos,Xs_neg],axis=1):
-					print(" ".join(["{0:.3f}".format(elem) for elem in row]))
-
-			Xs = X_single
+			
+			for row in X_single: #np.concatenate([Xs_pos,Xs_neg],axis=1):
+				print(" ".join(["{0:.3f}".format(elem) for elem in row]))
 			'''
+
+			#Xs = X_single
+			
 
 			X_res = 0
 
