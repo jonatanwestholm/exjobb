@@ -1,7 +1,5 @@
 #settings.py
 
-
-
 backblaze = {#"min_subgroup_length": 3, "max_subgroup_length": 6, "subgroup_length": 3, # general
 			#"lincorr_lag": 5, # candidate generation
 			#"VARMA_p": 2, "VARMA_q": 0, "ARMA_q": 2, # VARMA orders
@@ -33,7 +31,8 @@ backblaze = {#"min_subgroup_length": 3, "max_subgroup_length": 6, "subgroup_leng
 			}
 
 dodgers = {"train_share": 0.4, "test_share": 0.4, # splitting
-			"pos_w": 1.5, # classification and regression
+		   #"train_share": 0.8, "test_share": 0.2, # splitting
+			"pos_w": 2, # classification and regression
 			"ESN_spec": [#("RODAN", {"N": 500,"v":0}),
 						("RODAN",{"N":500,"v":1}),
 						("VAR", {"p": 20}),
@@ -45,7 +44,7 @@ dodgers = {"train_share": 0.4, "test_share": 0.4, # splitting
 						],
 			"ESN_size_out": 40, # ESN
 			"ESN_burn_in": 10,"ESN_batch_train" : True,"ESN_tikhonov_const": 3,  # ESN training
-			"ESN_sim_case": "trigger_waves", # ESN sim
+			#"ESN_sim_case": "trigger_waves", # ESN sim
 			"ESN_mixing": [("LEAKY","THRES",100),("THRES","RODAN",200),("VAR","THRES",20)],
 			#"ESN_rebuild_types": ["THRES","TRIGGER"], "ESN_rebuild_iterations": 1, "ESN_impact_limit": 1e-2,
 			"ESN_feature_selection": "SIG_NODES",

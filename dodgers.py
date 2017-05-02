@@ -11,6 +11,7 @@ import models_auxilliary as mod_aux
 import preprocessing as pp
 
 buf = 3000
+name = ""
 
 class Time_interval:
 	def __init__(self,date,start_time,end_time): #assumes that intervals don't stretch over midnight
@@ -36,11 +37,18 @@ class Time_interval:
 
 	def is_inside(self,date,time):
 		time = self.parse_datetime(date,time)
-		return time >= self.start_time - buf and time <= self.end_time + buf
+		#return time >= self.start_time - buf and time <= self.end_time + buf
+		if name == "Dodgers":
+			return time >= self.end_time and time <= self.end_time + buf
+		else:
+			return time >= self.start_time and time <= self.end_time
 
 	def is_after(self,date,time):
 		time = self.parse_datetime(date,time)
-		return time > self.end_time + buf
+		if name == "Dodgers":
+			return time > self.end_time + buf
+		else:
+			return time > self.end_time + buf
 
 def test_time_interval():
 	event_date = "07/26/05"
@@ -92,7 +100,7 @@ def make_cycle_data(dat,T):
 def main_linear_subspace(dat,coverage):
 	__,S,V = np.linalg.svd(dat,full_matrices=False)
 	cum_rel = mod_aux.cumulative_singular_values(S,plot=False)
-	if coverage > 1:
+	if coverage >= 1:
 		k = coverage
 	else:
 		k = min(np.where(cum_rel>coverage)[0])
@@ -111,6 +119,8 @@ def main(args):
 	filename = args.filename
 	names = pp.just_the_names([filename])
 	print(names)
+	global name
+	name = names[0]
 
 	data_filename = filename+".data"
 	event_filename = filename+".events"
@@ -125,6 +135,7 @@ def main(args):
 		intensity = np.array([int(row[2]) for row in data])
 		data = [row for row,ints in zip(data,intensity) if ints != -1]
 		T = 288
+		num_subspace = 4
 	elif names[0] == "CalIt2":
 		for row in data:
 			if len(row) < 4:
@@ -132,8 +143,15 @@ def main(args):
 		intensity = np.array([int(row[3]) for row in data])
 		data = [row[1:] for row,ints in zip(data,intensity) if ints != -1]
 		T = 48
+		num_subspace = 3
+
 
 	intensity = intensity[np.where(intensity!=-1)[0]]
+
+	#intensity = intensity.reshape([len(intensity),1])
+	#intensity = pp.smooth(intensity.T,5)[0].T
+
+	raw_intensity = intensity
 	
 	event_times = [Time_interval(event[0],event[1],event[2]) for event in events]
 	gt = generate_gt(data,event_times)
@@ -145,7 +163,7 @@ def main(args):
 	#intensity = pp.smooth(intensity,20)
 
 	X = make_cycle_data(intensity,T)
-	Cs = main_linear_subspace(X,3)
+	Cs = main_linear_subspace(X,num_subspace)
 	#print(X.shape)
 	#print(Cs.shape)
 	X = X - np.dot(np.dot(X,Cs.T),Cs)
@@ -153,7 +171,10 @@ def main(args):
 	intensity = X.reshape([numel,1])
 	intensity = pp.smooth(intensity,1)
 	
-	lag = 1
+	if args.model == "ESN":
+		lag = 1
+	else:
+		lag = 5
 	intensity = lagged_features(intensity,lag)
 	gt = gt[lag:]	
 	
@@ -165,6 +186,17 @@ def main(args):
 	'''
 
 	explanations = ["intensity"]
+
+	if __name__ == '__main__':
+		plt.figure()
+		plt.plot(raw_intensity/10,"b")
+		plt.plot(intensity,"g")
+		plt.plot(gt,"r")
+		plt.legend(["Raw intensity", "Processed intensity", "Event at stadium"])
+		plt.title("{0:s}".format(names[0]))
+		plt.xlabel("Sample no. (time)")
+		plt.ylabel("No. cars/ 5 secs")
+		plt.show()
 
 	return [intensity],[gt],explanations,names
 
@@ -178,5 +210,6 @@ if __name__ == '__main__':
     parser.add_argument('-e','--elemsep',dest = 'elemsep',default=',',help='Element Separator')
     parser.add_argument('-l','--linesep',dest = 'linesep',default='\n',help='Line Separator')
     args = parser.parse_args()
-    #main(args)
-    test_time_interval()
+    args.model = "ESN"
+    main(args)
+    #test_time_interval()

@@ -46,6 +46,19 @@ def main(args):
 		plt.show()
 		'''
 
+		data = pp.normalize_all(data,leave_zero=True)	
+
+		for dat in data:
+			plt.figure()
+			for feat in feature_idxs + gt_idx:
+				plt.plot(dat[:,feat])
+			plt.title("Occupancy and predictors")
+			plt.xlabel("Sample no. (time)")
+			plt.ylabel("Value (normalized)")
+			plt.legend(explanations+["occupancy"])
+
+		plt.show()
+
 		gt = [dat[:,gt_idx] for dat in data]
 		data = [dat[:,feature_idxs] for dat in data]	
 

@@ -458,6 +458,7 @@ class ESN(MTS_Model):
 		elif self.selection in ["SVD","SVD_SEP"]:
 			Xs = np.dot(X,self.Cs.T)
 
+			'''
 			if self.selection == "SVD":
 				X_res = X - np.dot(Xs,self.Cs)
 				X_res = np.linalg.norm(X_res,axis=1)
@@ -482,6 +483,8 @@ class ESN(MTS_Model):
 				plt.plot(X_res_neg,'m')
 
 				X_res = 0
+			'''
+			X_res = 0
 
 		elif self.selection == "K_MEANS":
 			Xs_pos = self.kmeans_pos.transform(X)
@@ -628,7 +631,7 @@ class MLP_TS:
 	                			hidden_layer_sizes=(5), random_state=1)
 		elif self.purpose == "CLASSIFICATION":
 			self.sv = MLPClassifier(solver='lbfgs', alpha=1e-5,
-	                			hidden_layer_sizes=(5), random_state=1)
+	                			hidden_layer_sizes=(10), random_state=1)
 		#elif self.style == "MLP":
 		#	self.sv = MLPClassifier(solver='lbfgs', alpha=1e-5,
         #	           				hidden_layer_sizes=(10,3), random_state=1)
