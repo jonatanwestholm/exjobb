@@ -48,7 +48,7 @@ class Time_interval:
 		if name == "Dodgers":
 			return time > self.end_time + buf
 		else:
-			return time > self.end_time + buf
+			return time > self.end_time
 
 def test_time_interval():
 	event_date = "07/26/05"
@@ -142,6 +142,7 @@ def main(args):
 				print(row)
 		intensity = np.array([int(row[3]) for row in data])
 		data = [row[1:] for row,ints in zip(data,intensity) if ints != -1]
+		intensity = intensity
 		T = 48
 		num_subspace = 3
 
@@ -149,7 +150,7 @@ def main(args):
 	intensity = intensity[np.where(intensity!=-1)[0]]
 
 	#intensity = intensity.reshape([len(intensity),1])
-	#intensity = pp.smooth(intensity.T,5)[0].T
+	#intensity = pp.smooth(intensity.T,2)[0].T
 
 	raw_intensity = intensity
 	
@@ -173,7 +174,9 @@ def main(args):
 	
 	if args.model == "ESN":
 		lag = 1
-	else:
+	elif args.model == "SVM":
+		lag = 5
+	elif args.model == "MLP":
 		lag = 5
 	intensity = lagged_features(intensity,lag)
 	gt = gt[lag:]	
@@ -189,10 +192,11 @@ def main(args):
 
 	if __name__ == '__main__':
 		plt.figure()
-		plt.plot(raw_intensity/10,"b")
-		plt.plot(intensity,"g")
-		plt.plot(gt,"r")
-		plt.legend(["Raw intensity", "Processed intensity", "Event at stadium"])
+		plt.plot(raw_intensity[::2]/10,"b")
+		plt.plot(raw_intensity[1::2]/10,"k")
+		plt.plot(intensity[::2],"g")
+		plt.plot(gt[::2],"r")
+		plt.legend(["Raw intensity out flow", "Raw intensity in flow", "Processed intensity", "Event at stadium"])
 		plt.title("{0:s}".format(names[0]))
 		plt.xlabel("Sample no. (time)")
 		plt.ylabel("No. cars/ 5 secs")

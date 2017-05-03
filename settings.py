@@ -30,24 +30,24 @@ backblaze = {#"min_subgroup_length": 3, "max_subgroup_length": 6, "subgroup_leng
 			"ESN_classifier": "SVM" #, "ESN_sig_limit": 1.1
 			}
 
-dodgers = {"train_share": 0.4, "test_share": 0.4, # splitting
-		   #"train_share": 0.8, "test_share": 0.2, # splitting
+dodgers = {"train_share": 0.4, "test_share": 0.3, # splitting
+		   #"train_share": 0.7, "test_share": 0.3, # splitting
 			"pos_w": 2, # classification and regression
 			"ESN_spec": [#("RODAN", {"N": 500,"v":0}),
 						("RODAN",{"N":500,"v":1}),
-						("VAR", {"p": 20}),
-						("THRES", {"N": 200,"random_thres":True,"direct_input":True}),
+						#("VAR", {"p": 20}),
+						#("THRES", {"N": 200,"random_thres":True,"direct_input":False}),
 						#("TRIGGER", {"N": 500,"random_thres": True,"direct_input":True}),
-						("LEAKY", {"N": 200, "r": 0.9,"v":1}),
+						#("LEAKY", {"N": 200, "r": 0.9,"v":0}),
 						#("HEIGHTSENS", {"N": 200, "random_thres": True}),
 						#("DIRECT",None),
 						],
-			"ESN_size_out": 40, # ESN
+			"ESN_size_out": 10, # ESN
 			"ESN_burn_in": 10,"ESN_batch_train" : True,"ESN_tikhonov_const": 3,  # ESN training
 			#"ESN_sim_case": "trigger_waves", # ESN sim
-			"ESN_mixing": [("LEAKY","THRES",100),("THRES","RODAN",200),("VAR","THRES",20)],
+			"ESN_mixing": [("LEAKY","THRES",100),("THRES","RODAN",200),("RODAN","LEAKY",200),("VAR","THRES",20)],
 			#"ESN_rebuild_types": ["THRES","TRIGGER"], "ESN_rebuild_iterations": 1, "ESN_impact_limit": 1e-2,
-			"ESN_feature_selection": "SIG_NODES",
+			"ESN_feature_selection": "K_MEANS",
 			"ESN_classifier": "LINEAR"
 			}
 

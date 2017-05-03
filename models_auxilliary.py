@@ -595,6 +595,7 @@ class Reservoir:
 		components = []
 
 		for key,comp_spec in spec:
+			print(key+", {"+", ".join(["{0:s}: {1:s}".format(arg,str(comp_spec[arg])) for arg in comp_spec])+"}")
 			#key,comp_spec = spec
 			if key == "VAR":
 				comp = [VAR(M,**comp_spec)]

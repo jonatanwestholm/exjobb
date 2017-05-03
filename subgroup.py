@@ -310,17 +310,20 @@ def evaluate(pred,gt,evaluate_on,args):
 			GG_all += GG
 			PG_all += PG
 			PP_all += PP
-			spec,prec,am,hm = aux.classification_stats(GG,PG,PP)
+			spec,prec,hm = aux.classification_stats(GG,PG,PP)
+			#if args.dataset in ["DODGERS"]:
+			#	spec = aux.interval_hits(P,G)
+			#	hm = 2/(1/spec + 1/prec)
 			if args.test_names:
 				test_name = args.test_names[j]
 			else:
 				test_name = "Fig {0:d}".format(j)
-			print("Unit {0:s}, spec: {1:.3f} prec: {2:.3f}, am: {3:.3f}, hm: {4:.3f}".format(test_name,spec,prec,am,hm))
+			print("Unit {0:s}, spec: {1:.3f} prec: {2:.3f}, hm: {3:.3f}".format(test_name,spec,prec,hm))
 
 			j += 1
 
-		spec,prec,am,hm = aux.classification_stats(GG_all,PG_all,PP_all)
-		print("Total. spec: {0:.3f} prec: {1:.3f}, am: {2:.3f}, hm: {3:.3f}".format(spec,prec,am,hm))
+		spec,prec,hm = aux.classification_stats(GG_all,PG_all,PP_all)
+		print("Total. spec: {0:.3f} prec: {1:.3f}, hm: {2:.3f}".format(spec,prec,hm))
 			
 		if args.plot:
 			aux.classification_plot(pred,gt,args.names)

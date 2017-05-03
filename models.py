@@ -391,7 +391,7 @@ class ESN(MTS_Model):
 		Y = np.concatenate(self.outputs,axis=0)
 
 		self.train_Cs(X,Y)
-		Xs,X_res = self.reduce(X,return_score=True)
+		Xs,X_res = self.reduce(X,return_score=True,Y=Y)
 
 		#print(sorted([0]))
 		if self.classifier == "LINEAR":
@@ -436,7 +436,7 @@ class ESN(MTS_Model):
 
 		plt.show()
 
-	def reduce(self,X,return_score=False):
+	def reduce(self,X,return_score=False,Y=[]):
 		if mod_aux.is_tensor(X,1):
 			X = X.T
 
@@ -444,10 +444,11 @@ class ESN(MTS_Model):
 			Xs = X[:,self.sig_nodes]
 			Xs = Xs - self.sep
 
-			if return_score:
+			if 0: #return_score:
 				#mod_aux.fit_svd(Xs,5,plot=True)
 				Xp = Xs - np.dot(np.ones([1,Xs.shape[1]]),np.mean(Xs,axis=0).reshape([Xs.shape[1],1]))
 				
+
 				dep = np.dot(Xp.T,Xp)
 				corr = mod_aux.normalize_corr_mat(dep)
 				for row in corr:
@@ -458,32 +459,38 @@ class ESN(MTS_Model):
 		elif self.selection in ["SVD","SVD_SEP"]:
 			Xs = np.dot(X,self.Cs.T)
 
-			'''
-			if self.selection == "SVD":
-				X_res = X - np.dot(Xs,self.Cs)
-				X_res = np.linalg.norm(X_res,axis=1)
-				X_res = X_res/np.linalg.norm(X,axis=1)
-				plt.plot(X_res,'g')
+			if 0: #return_score:
+				if self.selection == "SVD":
+					X_res = X - np.dot(Xs,self.Cs)
+					X_res = np.linalg.norm(X_res,axis=1)
+					X_res = X_res/np.linalg.norm(X,axis=1)
+					plt.plot(X_res,'g')
+					legends = ["Relative projection loss"]
 
-			elif self.selection == "SVD_SEP":
-				num = int(self.Oh/2)
-				Cs_pos = self.Cs[:num,:]
-				Cs_neg = self.Cs[num:,:]
+				elif self.selection == "SVD_SEP":
+					num = int(self.Oh/2)
+					Cs_pos = self.Cs[:num,:]
+					Cs_neg = self.Cs[num:,:]
 
-				X_res_pos = X - np.dot(np.dot(X,Cs_pos.T),Cs_pos)
-				X_res_neg = X - np.dot(np.dot(X,Cs_neg.T),Cs_neg)
+					X_res_pos = X - np.dot(np.dot(X,Cs_pos.T),Cs_pos)
+					X_res_neg = X - np.dot(np.dot(X,Cs_neg.T),Cs_neg)
 
-				X_res_pos = np.linalg.norm(X_res_pos,axis=1)
-				X_res_pos = X_res_pos/np.linalg.norm(X,axis=1)
+					X_res_pos = np.linalg.norm(X_res_pos,axis=1)
+					X_res_pos = X_res_pos/np.linalg.norm(X,axis=1)
 
-				X_res_neg = np.linalg.norm(X_res_neg,axis=1)
-				X_res_neg = X_res_neg/np.linalg.norm(X,axis=1)
+					X_res_neg = np.linalg.norm(X_res_neg,axis=1)
+					X_res_neg = X_res_neg/np.linalg.norm(X,axis=1)
 
-				plt.plot(X_res_pos,'g')
-				plt.plot(X_res_neg,'m')
+					plt.plot(X_res_pos,'g')
+					plt.plot(X_res_neg,'m')
+					legends = ["Relative projection loss on 'positive' subspace", "Relative projection loss on 'negative' subspace"]
 
-				X_res = 0
-			'''
+				plt.plot(Y,'r')
+
+				legends += ["Ground truth"]
+				plt.legend(legends)
+				plt.show()
+
 			X_res = 0
 
 		elif self.selection == "K_MEANS":
@@ -631,7 +638,7 @@ class MLP_TS:
 	                			hidden_layer_sizes=(5), random_state=1)
 		elif self.purpose == "CLASSIFICATION":
 			self.sv = MLPClassifier(solver='lbfgs', alpha=1e-5,
-	                			hidden_layer_sizes=(10), random_state=1)
+	                			hidden_layer_sizes=(5), random_state=1)
 		#elif self.style == "MLP":
 		#	self.sv = MLPClassifier(solver='lbfgs', alpha=1e-5,
         #	           				hidden_layer_sizes=(10,3), random_state=1)

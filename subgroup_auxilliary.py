@@ -324,7 +324,7 @@ def classification_plot(pred,gt,names):
 def classification_stats(GG,PG,PP):
 	spec = PG/GG
 	prec = PG/PP
-	am = (spec+prec)/2
+	#am = (spec+prec)/2
 	hm = 2/(1/spec + 1/prec)
 
 	#spec = spec[0][0]
@@ -336,15 +336,23 @@ def classification_stats(GG,PG,PP):
 	#print(am)
 	#print(hm)
 
-	return spec,prec,am,hm
+	return spec,prec,hm
 
+def nz_intervals(G):
+	G[0][0] = 0
+	G[0][-1] = 0
+	G = 1.0*(G != 0)
+	G = np.diff(G,axis=0)
+	return [(start,end) for start,end in zip(np.where(G==1)[0],np.where(G==-1)[0])]
 
+def interval_hits(P,G):
+	intervals = nz_intervals(G)
+	total = 0
+	for interval in intervals:
+		start,end = interval
+		total += sum(P[start:end]) != 0
 
-
-
-
-
-
+	return total/len(intervals)
 
 
 
