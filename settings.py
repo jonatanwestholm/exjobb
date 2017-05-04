@@ -30,28 +30,29 @@ backblaze = {#"min_subgroup_length": 3, "max_subgroup_length": 6, "subgroup_leng
 			"ESN_classifier": "SVM" #, "ESN_sig_limit": 1.1
 			}
 
-dodgers = {"train_share": 0.4, "test_share": 0.3, # splitting
-		   #"train_share": 0.7, "test_share": 0.3, # splitting
-			"pos_w": 2, # classification and regression
+dodgers = {#"train_share": 0.4, "test_share": 0.3, # splitting
+		   "train_share": 0.7, "test_share": 0.3, # splitting
+			"pos_w": 3, # classification and regression
 			"ESN_spec": [#("RODAN", {"N": 500,"v":0}),
-						("RODAN",{"N":500,"v":1}),
-						#("VAR", {"p": 20}),
-						#("THRES", {"N": 200,"random_thres":True,"direct_input":False}),
+						("RODAN",{"N":1000,"v":0.5,"r":0.9}),
+						("VAR", {"p": 10}),
+						("THRES", {"N": 200,"random_thres":True,"direct_input":True}),
 						#("TRIGGER", {"N": 500,"random_thres": True,"direct_input":True}),
-						#("LEAKY", {"N": 200, "r": 0.9,"v":0}),
+						("LEAKY", {"N": 200, "r": 0.9,"v":0.3}),
 						#("HEIGHTSENS", {"N": 200, "random_thres": True}),
 						#("DIRECT",None),
 						],
-			"ESN_size_out": 10, # ESN
+			"ESN_size_out": 20, # ESN
 			"ESN_burn_in": 10,"ESN_batch_train" : True,"ESN_tikhonov_const": 3,  # ESN training
 			#"ESN_sim_case": "trigger_waves", # ESN sim
-			"ESN_mixing": [("LEAKY","THRES",100),("THRES","RODAN",200),("RODAN","LEAKY",200),("VAR","THRES",20)],
+			"ESN_mixing": [("RODAN","RODAN",100),("LEAKY","THRES",100),("THRES","RODAN",200),("RODAN","LEAKY",200),("VAR","THRES",10),("VAR","RODAN",10)],
 			#"ESN_rebuild_types": ["THRES","TRIGGER"], "ESN_rebuild_iterations": 1, "ESN_impact_limit": 1e-2,
-			"ESN_feature_selection": "K_MEANS",
+			"ESN_feature_selection": "SVD_SEP",
 			"ESN_classifier": "LINEAR"
 			}
 
-occupancy = {"train_share": 0.4, "test_share": 0.4, # splitting
+occupancy = {"train_share": 0.4, "test_share": 0.4, "self_test": True,# splitting
+			 #"train_share": 0.4, "test_share": 0.6, "self_test": False,# splitting
 			"pos_w": 2, # classification and regression
 			"ESN_spec": [("RODAN", {"N": 200,"v":0}),
 						("RODAN",{"N": 200,"v":1}),

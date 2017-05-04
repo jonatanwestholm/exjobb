@@ -319,6 +319,8 @@ def classification_plot(pred,gt,names):
 		plt.plot(gt_arr,'r')
 		plt.axis([0,len(pred_arr), min(gt_arr)-0.1,max(gt_arr)+0.1])
 		plt.legend(["Predicted","Ground Truth"],loc='best')
+		plt.xlabel("Sample no. (time)")
+		plt.ylabel("Value")
 	plt.show()
 
 def classification_stats(GG,PG,PP):

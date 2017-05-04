@@ -22,10 +22,11 @@ def main(args):
 		pattern = args.pattern
 
 		filenames = glob.glob(filename+pattern)
+		filenames = sorted(filenames,reverse=True)
 		names = just_the_names(filenames)
 		#print(filename+pattern)
 		#print(sorted(filenames,reverse=False))
-		print(sorted(filenames,reverse=True))
+		print(names)
 
 		feature_idxs = [2,3,4,5,6]
 		gt_idx = [7]
@@ -46,8 +47,9 @@ def main(args):
 		plt.show()
 		'''
 
-		data = pp.normalize_all(data,leave_zero=True)	
+		#data = pp.normalize_all(data,leave_zero=True)	
 
+		'''
 		for dat in data:
 			plt.figure()
 			for feat in feature_idxs + gt_idx:
@@ -58,6 +60,7 @@ def main(args):
 			plt.legend(explanations+["occupancy"])
 
 		plt.show()
+		'''
 
 		gt = [dat[:,gt_idx] for dat in data]
 		data = [dat[:,feature_idxs] for dat in data]	

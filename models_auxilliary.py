@@ -472,6 +472,8 @@ class RODAN(Component):
 		N = self.N_init
 		self.A = ESN_A("DLR",self.N,r=self.r)
 		self.B = ESN_B("SECTIONS",M,N,v=self.v)
+		self.B = self.B*np.random.normal(0,1,[N,1])
+		#print(self.B)
 		self.f = [ESN_f("TANH")]
 
 	def get_input_idx(self):
@@ -594,8 +596,12 @@ class Reservoir:
 	def build(self,M,spec):
 		components = []
 
+		description = []
+
 		for key,comp_spec in spec:
-			print(key+", {"+", ".join(["{0:s}: {1:s}".format(arg,str(comp_spec[arg])) for arg in comp_spec])+"}")
+			desc = key+"; {"+", ".join(["{0:s}: {1:s}".format(arg,str(comp_spec[arg])) for arg in comp_spec])+"}"
+			print(desc)
+			description.append(desc)
 			#key,comp_spec = spec
 			if key == "VAR":
 				comp = [VAR(M,**comp_spec)]
@@ -616,6 +622,8 @@ class Reservoir:
 			
 			components += comp
 
+		print(", ".join(description))
+
 		self.components = components
 
 	def mix(self,mixing_spec,replace):
@@ -631,10 +639,12 @@ class Reservoir:
 				selected_sources = np.random.choice(sources,num,replace)
 				selected_targets = np.random.choice(targets,num,replace)
 
-				weight = 1
+				weight = 0.5
 				for source,target in zip(selected_sources,selected_targets):
 					source.set_output(target,weight)
 					target.set_input(source,weight)
+
+		print(", ".join(map(str,mixing_spec)))
 
 	def get_nodes(self): # return all nodes in reservoir as list
 		return flatten([comp.nodes for comp in self.components])

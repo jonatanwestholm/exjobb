@@ -300,10 +300,12 @@ def evaluate(pred,gt,evaluate_on,args):
 			j+=1
 
 	elif test_type in ["CLASSIFICATION","REGRESSION"]:
+		G_all = np.array([[0]])
 		GG_all = 0
 		PG_all = 0
 		PP_all = 0
 		for P,G in zip(pred,gt):
+			G_all = np.concatenate([G_all,G])
 			GG = np.sum(G)
 			PG = float(np.dot(P.T,G))
 			PP = np.sum(P)
@@ -311,19 +313,26 @@ def evaluate(pred,gt,evaluate_on,args):
 			PG_all += PG
 			PP_all += PP
 			spec,prec,hm = aux.classification_stats(GG,PG,PP)
-			#if args.dataset in ["DODGERS"]:
-			#	spec = aux.interval_hits(P,G)
-			#	hm = 2/(1/spec + 1/prec)
+			if args.dataset in ["DODGERS"]:
+				spec = aux.interval_hits(P,G)
+				try:
+					spec = spec[0]
+				except IndexError:
+					pass
+				hm = 2/(1/spec + 1/prec)
 			if args.test_names:
 				test_name = args.test_names[j]
 			else:
 				test_name = "Fig {0:d}".format(j)
-			print("Unit {0:s}, spec: {1:.3f} prec: {2:.3f}, hm: {3:.3f}".format(test_name,spec,prec,hm))
+			triv = 2*np.mean(G)/(1+np.mean(G))
+			print("Unit {0:s}, spec: {1:.3f} prec: {2:.3f}, hm: {3:.3f}, trivial: {4:.3f}".format(test_name,spec,prec,hm,triv))
 
 			j += 1
 
+		G_all = G_all[1:]
+		triv = 2*np.mean(G_all)/(1+np.mean(G_all))
 		spec,prec,hm = aux.classification_stats(GG_all,PG_all,PP_all)
-		print("Total. spec: {0:.3f} prec: {1:.3f}, hm: {2:.3f}".format(spec,prec,hm))
+		print("Total. spec: {0:.3f} prec: {1:.3f}, hm: {2:.3f}, trivial: {3:.3f}".format(spec,prec,hm,triv))
 			
 		if args.plot:
 			aux.classification_plot(pred,gt,args.names)
@@ -383,10 +392,17 @@ def subgroup(data,gt,args):
 																			test_share=args.settings["test_share"],
 																			names=args.names,
 																			return_names=True)
-	#test_data = train_data
-	#test_gt = train_gt
-	#test_names = train_names
+	print(train_names)
+	print(test_names)
 
+	try: 
+		if args.settings["self_test"]:
+			test_data = train_data
+			test_gt = train_gt
+			test_names = train_names
+	except AttributeError:
+		pass
+	
 	args.train_names = train_names
 	args.test_names = test_names
 	print(len(train_data))

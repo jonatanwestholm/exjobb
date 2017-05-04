@@ -299,7 +299,7 @@ class ESN(MTS_Model):
 			self.sep = sep[self.sig_nodes]
 			self.reservoir.print_significant(sig,self.sig_nodes)
 
-			#mod_aux.significant_nodes(X[:,self.sig_nodes],Y,plot=True)
+			mod_aux.significant_nodes(X[:,self.sig_nodes],Y,plot=True)
 			#self.sig_nodes = np.where(sig < self.sig_limit)[0]
 
 			#print(sig[self.sig_nodes])
