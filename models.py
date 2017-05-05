@@ -444,6 +444,8 @@ class ESN(MTS_Model):
 			Xs = X[:,self.sig_nodes]
 			Xs = Xs - self.sep
 
+			Xs = np.abs(Xs)
+
 			if 0: #return_score:
 				#mod_aux.fit_svd(Xs,5,plot=True)
 				Xp = Xs - np.dot(np.ones([1,Xs.shape[1]]),np.mean(Xs,axis=0).reshape([Xs.shape[1],1]))
@@ -458,6 +460,9 @@ class ESN(MTS_Model):
 
 		elif self.selection in ["SVD","SVD_SEP"]:
 			Xs = np.dot(X,self.Cs.T)
+
+			if return_score:
+				mod_aux.plot_variable_splits(Xs,Y)
 
 			if 0: #return_score:
 				if self.selection == "SVD":
@@ -498,8 +503,12 @@ class ESN(MTS_Model):
 			Xs_neg = self.kmeans_neg.transform(X)
 			Xs = np.concatenate([Xs_pos,Xs_neg],axis=1)
 
+			if return_score:
+				mod_aux.plot_variable_splits(Xs,Y)
+
 			#print(Xs)
-			Xs = 1/(1+Xs)
+			#Xs = 1/(1+Xs)
+
 
 			'''
 			if return_score:

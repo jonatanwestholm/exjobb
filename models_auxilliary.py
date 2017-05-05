@@ -160,6 +160,16 @@ def cumulative_singular_values(S,plot=False):
 
 	return S_energy
 
+def plot_variable_splits(Xs,Y):
+	Xs_pos = Xs[np.where(Y==1)[0]]
+	Xs_neg = Xs[np.where(Y==0)[0]]
+
+	for xs_pos,xs_neg in zip(Xs_pos.T,Xs_neg.T):
+		plt.figure()
+		plt.hist([xs_pos,xs_neg],500)
+
+	plt.show()
+
 def ESN_A(architecture,N,r=0.5,b=0.05):
 
 	if architecture == "DLR": # Delay Line Reservoir

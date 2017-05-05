@@ -47,9 +47,9 @@ def main(args):
 		plt.show()
 		'''
 
-		#data = pp.normalize_all(data,leave_zero=True)	
-
 		'''
+		data = pp.normalize_all(data,leave_zero=True)	
+		
 		for dat in data:
 			plt.figure()
 			for feat in feature_idxs + gt_idx:

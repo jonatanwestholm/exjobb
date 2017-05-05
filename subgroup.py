@@ -400,7 +400,7 @@ def subgroup(data,gt,args):
 			test_data = train_data
 			test_gt = train_gt
 			test_names = train_names
-	except AttributeError:
+	except KeyError:
 		pass
 	
 	args.train_names = train_names
