@@ -23,11 +23,64 @@ def is_tensor(X,order=2):
 	else:
 		return False
 
+def rank(lst):
+	return [i[0] for i in sorted(enumerate(lst), key=lambda x:x[1])]
+
 def normalize_corr_mat(dep):
 	#autoprecisions = forgiving_inv(np.diag(dep))
 	autocorr = np.sqrt(np.diag(1/np.diag(dep)))
 	#print_mat(autocorr)
 	return np.dot(autocorr,np.dot(dep,autocorr))
+
+def shannon_entropy(dists):
+	total = sum(flatten(dists))
+	entropy = 0
+	for dist in dists:
+		tot = sum(dist)
+		if tot:
+			sh = sum([p*np.log2(p/tot) for p in dist if p])
+			entropy += sh
+
+	return -entropy/total
+
+def shannon_separators(binary_idxs,X,Y,num):
+	print(binary_idxs)
+	shannon_gain = []
+	#X_pos = X[np.where(Y==1)[0],:]
+	#X_neg = X[np.where(Y==0)[0],:]
+	#AUB = sum(Y)[0]
+	#CUD = X.shape[0]-AUB
+	#print(AUB)
+	#print(CUD)
+	for bin_idx in binary_idxs:
+		try:
+			A = sum(Y[np.where(X[:,bin_idx]==1)[0]])[0]
+			C = sum(X[:,bin_idx])-A
+			B = sum(Y[np.where(X[:,bin_idx]==0)[0]])[0]
+			D = sum(X[:,bin_idx]==0)-B
+		except TypeError:
+			A = sum(Y[np.where(X[:,bin_idx]==1)[0]])
+			C = sum(X[:,bin_idx])-A
+			B = sum(Y[np.where(X[:,bin_idx]==0)[0]])
+			D = sum(X[:,bin_idx]==0)-B
+		#print(A)
+		#A = sum(x_pos)
+		#C = AUC-A
+		#C = sum(x_neg)
+		#D = BUD-D
+		#print("A={0:.1f} B={1:.1f} C={2:.1f} D={3:.1f}".format(A,B,C,D))
+		#print(shannon_entropy([[A,B],[C,D]]))
+		shannon_gain.append(shannon_entropy([[A,C],[B,D]]))
+
+	initial = shannon_entropy([[A+B,C+D]])
+	print(initial)
+	print(shannon_gain-initial/10000000)
+	shannon_rank = rank(shannon_gain)
+
+	plot_variable_splits(X[:,[binary_idxs[idx] for idx in shannon_rank[:num]]],Y,[shannon_gain[idx] for idx in shannon_rank[:num]],2)
+
+	#return binary_idxs[shannon_rank[:num]]
+	return [binary_idxs[idx] for idx in shannon_rank[:num]]
 
 def significant_nodes(X,Y,plot=False):
 	Y = Y-np.min(Y)
@@ -38,13 +91,15 @@ def significant_nodes(X,Y,plot=False):
 		pos = feat[np.where(Y==1)[0]]
 		neg = feat[np.where(Y==0)[0]]
 
+		sig,sep = significance_test(pos,neg)
+
 		if plot:
 			#plt.scatter(neg,np.zeros_like(neg),color='b')
 			#plt.scatter(pos,np.zeros_like(pos),color='r')
-			plt.hist([pos,neg],50)
+			plt.hist([pos,neg],20)
+			plt.title("Confidence interval overlap: {0:.3f} \n Split at: {1:.3f}".format(sig,sep))
 			plt.show()
 
-		sig,sep = significance_test(pos,neg)
 		sigs.append(sig)
 		seps.append(sep)
 
@@ -118,8 +173,8 @@ def fit_kmeans(X_pos,X_neg,num):
 	pos = KMeans(n_clusters=num).fit(X_pos)
 	neg = KMeans(n_clusters=num).fit(X_neg)
 
-	pos_centers = pos.cluster_centers_
-	neg_centers = neg.cluster_centers_
+	#pos_centers = pos.cluster_centers_
+	#neg_centers = neg.cluster_centers_
 	
 	#print(pos_centers)
 	#print(neg_centers)
@@ -134,7 +189,7 @@ def color_ranking(X,Y):
 
 	Rank = []
 	for i,row in enumerate(X):
-		row_rank = [i[0] for i in sorted(enumerate(row), key=lambda x:x[1])]
+		row_rank = rank(row) #[i[0] for i in sorted(enumerate(row), key=lambda x:x[1])]
 		row_rank = [int(elem < num) for elem in row_rank]
 		Rank.append(row_rank)
 
@@ -145,7 +200,10 @@ def color_ranking(X,Y):
 
 	Rank = np.concatenate([Y,spacing,Rank],axis=1)
 
-	plt.imshow(Rank,interpolation='none',aspect='auto')
+	plt.imshow(Rank,interpolation='none',aspect='auto',extent=[-1, X.shape[1], 0, X.shape[0]])
+	plt.title("Centroid ranking. Red: positive. Blue: negative.")
+	plt.xlabel("Rank")
+	plt.ylabel("Time")
 	plt.show()
 
 def cumulative_singular_values(S,plot=False):
@@ -160,13 +218,20 @@ def cumulative_singular_values(S,plot=False):
 
 	return S_energy
 
-def plot_variable_splits(Xs,Y):
+def plot_variable_splits(Xs,Y,explanations="",num_bins=50):
 	Xs_pos = Xs[np.where(Y==1)[0]]
 	Xs_neg = Xs[np.where(Y==0)[0]]
 
-	for xs_pos,xs_neg in zip(Xs_pos.T,Xs_neg.T):
+	if explanations == "":
+		explanations = list(range(Xs_pos.shape[1]))
+
+	for xs_pos,xs_neg,expl in zip(Xs_pos.T,Xs_neg.T,explanations):
+		#print(xs_pos)
+		#print(xs_neg)
 		plt.figure()
-		plt.hist([xs_pos,xs_neg],500)
+		plt.title(expl)
+		plt.hist([xs_pos,xs_neg],num_bins)
+		plt.legend(["Positive examples","Negative examples"])
 
 	plt.show()
 
@@ -301,8 +366,8 @@ def ESN_f(architecture,thres=0):
 
 def make_thres(M, N, direct_input, random_thres, turn_on):
 	B = ESN_B("SELECTED",M,2*N)
-	B[N:,:] = 0
-	if direct_input:
+	#B[N:,:] = 0
+	if not direct_input:
 		B[:N,:] = 0
 
 	lower_diag = np.ravel(TH*np.ones([N,1]))
@@ -325,7 +390,7 @@ def make_thres(M, N, direct_input, random_thres, turn_on):
 
 def make_trigger(M, N, direct_input, random_thres, turn_on):
 	B = ESN_B("SELECTED",M,3*N)
-	B[N:,:] = 0
+	B[N:2*N,:] = 0
 	if not direct_input:
 		B[:N,0] = 0
 
@@ -697,6 +762,20 @@ class Reservoir:
 		A = A.tocsr()
 		return A
 
+	def get_binary_idxs(self):
+		binary_idxs = []
+		for comp in self.components:
+			if comp.get_typename() == "THRES":
+				start = comp.input_idx
+				N = comp.number
+				binary_idxs.extend(list(range(start,start+N)))
+			elif comp.get_typename() == "TRIGGER":
+				start = comp.input_idx
+				N = comp.number
+				binary_idxs.extend(list(range(start+N,start+2*N)))
+
+		return binary_idxs
+
 	def rebuild(self,comp_types,passes_threshold):
 		total_rebuilt = 0
 		for comp in self.components:
@@ -827,17 +906,11 @@ class Kalman:
 		self.X = X
 
 if __name__ == '__main__':	
-	r = 0.25
-	g = ESN_f("INVERSE_DECAY",r)
-	h = ESN_f("DOUBLE_POSLIN",r)
-	f = lambda x: g(h(x))
+	dists0 = [[10,1]]
+	dists1 = [[9,1],[1,0]]
 
-	a = np.linspace(-10,10,1000)
-
-	plt.plot(a,f(a))
-	plt.plot(a,a)
-	plt.plot(a,np.zeros_like(a))
-	plt.show()
+	print(shannon_entropy(dists0))
+	print(shannon_entropy(dists1))
 
 
 

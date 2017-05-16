@@ -174,7 +174,11 @@ def main(args):
 			data = pp.remove_small_samples(data,min_sample_time)
 			print("after removing missing and small: "+ str(len(data)))
 
-			# Mathematical preprocessing	
+			# Mathematical preprocessing
+			# add 0 to beginning
+			num_features = len(idxs)
+			data = [np.concatenate([np.zeros([1,num_features]),dat],axis=0) for dat in data]
+
 			extended_features = False
 			if extended_features:		
 				exta = pp.differentiate(data)

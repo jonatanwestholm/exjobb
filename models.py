@@ -212,6 +212,7 @@ class ESN(MTS_Model):
 		size_in,size_out,size_label = orders
 		self.M = size_in
 		self.Oh = size_out
+		self.Binary_Oh = 0
 		self.L = size_label
 		
 		self.reservoir = mod_aux.Reservoir(self.M,spec,mixing,False)
@@ -290,16 +291,21 @@ class ESN(MTS_Model):
 		return self.X
 
 	def train_Cs(self,X,Y):
+
+		if self.Binary_Oh:
+			binary_idxs = self.reservoir.get_binary_idxs()
+			self.thres_sep = mod_aux.shannon_separators(binary_idxs,X,Y,self.Binary_Oh)
+
 		if self.selection == "SIG_NODES":
 			sig,sep = mod_aux.significant_nodes(X,Y)
-			sig_nodes = [i[0] for i in sorted(enumerate(sig), key=lambda x:x[1])]
+			sig_nodes = mod_aux.rank(sig) #[i[0] for i in sorted(enumerate(sig), key=lambda x:x[1])]
 			self.sig_nodes = sig_nodes[:self.Oh]
 			#print(self.sig_nodes)
 			#print(sep)
 			self.sep = sep[self.sig_nodes]
 			self.reservoir.print_significant(sig,self.sig_nodes)
 
-			mod_aux.significant_nodes(X[:,self.sig_nodes],Y,plot=True)
+			#mod_aux.significant_nodes(X[:,self.sig_nodes],Y,plot=True)
 			#self.sig_nodes = np.where(sig < self.sig_limit)[0]
 
 			#print(sig[self.sig_nodes])
@@ -310,7 +316,7 @@ class ESN(MTS_Model):
 		elif self.selection == "SVD":
 			self.Cs = mod_aux.fit_svd(X,self.Oh)
 
-		elif self.selection == "SVD_SEP":
+		elif self.selection in ["SVD_SEP"]:
 			X_pos = X[np.where(Y==1)[0],:]
 			X_neg = X[np.where(Y==0)[0],:]
 			self.Cs = mod_aux.fit_svd_sep(X_pos,X_neg,self.Oh)
@@ -321,7 +327,6 @@ class ESN(MTS_Model):
 			num = int(self.Oh/2)
 			self.kmeans_pos,self.kmeans_neg = mod_aux.fit_kmeans(X_pos,X_neg,num)
 
-
 			Xs_pos = self.kmeans_pos.transform(X)
 			Xs_neg = self.kmeans_neg.transform(X)
 			Xs = np.concatenate([Xs_pos,Xs_neg],axis=1)
@@ -329,7 +334,6 @@ class ESN(MTS_Model):
 
 		elif self.selection == "AUTOENCODER":
 			pass
-
 
 	def train_Cw(self,Xs,Y,W=[],tikho=0):
 		if self.classifier == "LINEAR":
@@ -444,8 +448,6 @@ class ESN(MTS_Model):
 			Xs = X[:,self.sig_nodes]
 			Xs = Xs - self.sep
 
-			Xs = np.abs(Xs)
-
 			if 0: #return_score:
 				#mod_aux.fit_svd(Xs,5,plot=True)
 				Xp = Xs - np.dot(np.ones([1,Xs.shape[1]]),np.mean(Xs,axis=0).reshape([Xs.shape[1],1]))
@@ -461,8 +463,15 @@ class ESN(MTS_Model):
 		elif self.selection in ["SVD","SVD_SEP"]:
 			Xs = np.dot(X,self.Cs.T)
 
-			if return_score:
-				mod_aux.plot_variable_splits(Xs,Y)
+			#Xs = np.log(np.abs(Xs)+0.000001)
+
+			if 0: #return_score:
+				if self.selection == "SVD":
+					explanations = ["Principal Component {0:d}".format(i+1) for i in range(self.Oh)]
+				else:
+					explanations = ["Principal Component {0:d}, positive data".format(i+1) for i in range(int(self.Oh/2))]
+					explanations += ["Principal Component {0:d}, negative data".format(i+1) for i in range(int(self.Oh/2))]
+				mod_aux.plot_variable_splits(Xs,Y,explanations,num_bins=50)
 
 			if 0: #return_score:
 				if self.selection == "SVD":
@@ -503,7 +512,7 @@ class ESN(MTS_Model):
 			Xs_neg = self.kmeans_neg.transform(X)
 			Xs = np.concatenate([Xs_pos,Xs_neg],axis=1)
 
-			if return_score:
+			if 0: #return_score:
 				mod_aux.plot_variable_splits(Xs,Y)
 
 			#print(Xs)

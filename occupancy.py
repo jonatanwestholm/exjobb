@@ -11,7 +11,7 @@ import preprocessing as pp
 explanations = ["Temperature","Humidity","Light","CO2","HumidityRatio"]
 
 def just_the_names(filenames):
-	return [filename.split('/')[-1] for filename in filenames]
+	return [filename.split('/')[-1][:-4] for filename in filenames]
 
 def main(args):
 	filename = args.filename

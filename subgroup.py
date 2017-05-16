@@ -102,8 +102,8 @@ def candidate_generate(train_data,remaining,num,args):
 		cands = [aux.map_idx(remaining,cand)]*num # subgroups won't be edited, only read
 	elif gen == "CUSTOM":
 		#cands = [[8,13,15,18,19,21]] # turbofan 2
-		#cand = [2,6,9,10,11]
-		cand = [0,1,2]
+		cand = [2,6,9,10,11]
+		#cand = [0,1,2]
 		ext = [] #[elem+12 for elem in cand]
 		cands = [cand + ext]
 	elif gen == "RANDOM":
@@ -335,7 +335,7 @@ def evaluate(pred,gt,evaluate_on,args):
 		print("Total. spec: {0:.3f} prec: {1:.3f}, hm: {2:.3f}, trivial: {3:.3f}".format(spec,prec,hm,triv))
 			
 		if args.plot:
-			aux.classification_plot(pred,gt,args.names)
+			aux.classification_plot(pred,gt,args.test_names,args.dataset,args.model)
 
 	elif test_type == "REGRESSION":
 		pass		
@@ -393,7 +393,9 @@ def subgroup(data,gt,args):
 																			names=args.names,
 																			return_names=True)
 	print(train_names)
+	print(len(train_data))
 	print(test_names)
+	print(len(test_data))
 
 	try: 
 		if args.settings["self_test"]:
