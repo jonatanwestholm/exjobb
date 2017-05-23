@@ -305,7 +305,7 @@ class ESN(MTS_Model):
 			self.sep = sep[self.sig_nodes]
 			self.reservoir.print_significant(sig,self.sig_nodes)
 
-			#mod_aux.significant_nodes(X[:,self.sig_nodes],Y,plot=True)
+			mod_aux.significant_nodes(X[:,self.sig_nodes],Y,plot=True)
 			#self.sig_nodes = np.where(sig < self.sig_limit)[0]
 
 			#print(sig[self.sig_nodes])
@@ -379,7 +379,7 @@ class ESN(MTS_Model):
 			X_vec = X_vec[:-1,:]
 			Y_vec = U[1:,:]
 		else:
-			Y_vec = y
+			Y_vec = y[burn_in:]
 			W_vec = np.ones_like(Y_vec)
 			W_vec[Y_vec==1] = self.pos_w
 			self.weights.append(W_vec)

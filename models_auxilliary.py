@@ -98,6 +98,8 @@ def significant_nodes(X,Y,plot=False):
 			#plt.scatter(pos,np.zeros_like(pos),color='r')
 			plt.hist([pos,neg],20)
 			plt.title("Confidence interval overlap: {0:.3f} \n Split at: {1:.3f}".format(sig,sep))
+			plt.xlabel("Value")
+			plt.ylabel("Number of time samples")
 			plt.show()
 
 		sigs.append(sig)
@@ -232,6 +234,8 @@ def plot_variable_splits(Xs,Y,explanations="",num_bins=50):
 		plt.title(expl)
 		plt.hist([xs_pos,xs_neg],num_bins)
 		plt.legend(["Positive examples","Negative examples"])
+		plt.xlabel("Value")
+		plt.ylabel("Number of time samples")
 
 	plt.show()
 

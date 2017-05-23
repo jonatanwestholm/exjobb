@@ -47,20 +47,24 @@ def main(args):
 		plt.show()
 		'''
 
-		'''
+		
 		data = pp.normalize_all(data,leave_zero=True)	
 		
 		for dat in data:
 			plt.figure()
-			for feat in feature_idxs + gt_idx:
+			for feat in feature_idxs:
 				plt.plot(dat[:,feat])
+			gt_array = dat[:,gt_idx]
+			gt_array = gt_array - min(gt_array)
+			gt_array = gt_array/max(gt_array)
+			plt.plot(gt_array)
 			plt.title("Occupancy and predictors")
 			plt.xlabel("Sample no. (time)")
 			plt.ylabel("Value (normalized)")
 			plt.legend(explanations+["occupancy"])
 
 		plt.show()
-		'''
+		
 
 		gt = [dat[:,gt_idx] for dat in data]
 		data = [dat[:,feature_idxs] for dat in data]	

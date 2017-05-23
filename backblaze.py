@@ -6,6 +6,7 @@ import re
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.io
+import collections
 import glob
 import time
 import smart_explanations
@@ -33,10 +34,11 @@ def all_smart_except(remove):
 
 def smart_expl(idx):
 	try:
+		key = BB_SMART_order[idx]
 		expl = smart_explanations.smart[BB_SMART_order[idx]]
 	except KeyError:
 		expl = "S.M.A.R.T feature " + str(BB_SMART_order[idx])
-	return expl
+	return key,expl
 
 def melt_instance(args,dir_name,pattern,serial_location,model_location):
 	target = args.target
@@ -76,6 +78,30 @@ def melt_instance(args,dir_name,pattern,serial_location,model_location):
 					os.rename(target+name+'.csv',target+name+'_fail.csv')
 			else:
 				pass #print(name)
+
+def product_model_dictionary(filenames):
+	d = collections.defaultdict(lambda : [0,0])
+	for fname in filenames:
+		prodname = fname.split('_')[0]
+		count = d[prodname]
+		count[0] += 1
+		if "_fail" in fname:
+			count[1] += 1
+
+	return d
+
+def product_failures(args,filename):
+	filenames = glob.glob(filename+"*.csv")
+	filenames = [fname.split('/')[-1] for fname in filenames]
+	filenames = [fname[:-4] for fname in filenames]
+	d = product_model_dictionary(filenames)
+	for key in d:
+		total = d[key][0]
+		failed = d[key][1]
+		share = failed/total
+		print(key.ljust(30,' ')+"Total: {0:d}".format(total).ljust(15,' ')+
+								"Failed: {0:d}".format(failed).ljust(15,' ')+
+								"Share: {0:.2f}".format(share).ljust(15,' '))
 
 def main(args):
 	filename = args.filename
@@ -126,7 +152,7 @@ def main(args):
 							plt.figure()
 							plt.xlabel('Days before failure (red) or end of measurement (blue)')
 							try:
-								plt.title("S.M.A.R.T feature {0:d}: {1:s}".format(BB_SMART_order[i],smart_expl(i)))
+								plt.title("S.M.A.R.T feature {0:d}: {1:s}".format(BB_SMART_order[i],smart_expl(i)[1]))
 							except IndexError:
 								plt.title("Plot {0:d}".format(i))
 							except KeyError:
@@ -167,7 +193,8 @@ def main(args):
 			print(idxs)
 			
 			data = [dat[:,sorted(idxs)] for dat in data]
-			explanations = [smart_expl(i) for i in sorted(idxs)]
+			keys = [smart_expl(i)[0] for i in sorted(idxs)]
+			explanations = [smart_expl(i)[1] for i in sorted(idxs)]
 
 			print("before removing missing and small: "+ str(len(data)))
 			data,__ = pp.remove_instances_with_missing(data)
@@ -198,7 +225,7 @@ def main(args):
 
 			data = pp.normalize_all(data,leave_zero=True)
 			print("Qualified indexes: " + str(sorted(idxs)))
-			print("Explanations: " + str(explanations))
+			print("Explanations " + ["{0:s}: {1:s}".format(str(key),str(explanation)) for key, explanation in zip(keys,explanations)])
 
 			names = just_the_names(filenames)
 
@@ -226,6 +253,8 @@ def main(args):
 		model_location = 2
 
 		melt_instance(args,filename,pattern,serial_location,model_location)
+	elif datatype == "POPULATION_STATISTICS":
+		product_failures(args,filename)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
