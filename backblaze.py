@@ -225,7 +225,9 @@ def main(args):
 
 			data = pp.normalize_all(data,leave_zero=True)
 			print("Qualified indexes: " + str(sorted(idxs)))
-			print("Explanations " + ["{0:s}: {1:s}".format(str(key),str(explanation)) for key, explanation in zip(keys,explanations)])
+			#print(explanations)
+			#print(keys)
+			print("Explanations " + " ".join(["{0:s}: {1:s}".format(str(key),str(explanation)) for key, explanation in zip(keys,explanations)]))
 
 			names = just_the_names(filenames)
 

@@ -233,9 +233,9 @@ def split(data,gt,split_method,train_share=0.6,test_share=0.2,names="",return_na
 		N = len(data)
 		split1 = int(np.floor(train_share*N))
 		split2 = int(np.floor((train_share+test_share)*N))
-		print(split1)
-		print(split2)
-		print(names)
+		#print(split1)
+		#print(split2)
+		#print(names)
 
 		train_data = data[0:split1]
 		train_gt = gt[0:split1]

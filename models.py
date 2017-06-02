@@ -215,7 +215,7 @@ class ESN(MTS_Model):
 		self.Binary_Oh = 0
 		self.L = size_label
 		
-		self.reservoir = mod_aux.Reservoir(self.M,spec,mixing,False)
+		self.reservoir = mod_aux.Reservoir(self.M,spec,mixing,True)
 		self.A,self.B,self.f,self.idx_groups = self.reservoir.get_matrices()
 		#self.reservoir.print_reservoir()
 		#for row in self.A.toarray():
@@ -332,7 +332,7 @@ class ESN(MTS_Model):
 			Xs = np.concatenate([Xs_pos,Xs_neg],axis=1)
 			mod_aux.color_ranking(Xs,Y)
 
-		elif self.selection == "AUTOENCODER":
+		elif self.selection == "IDENTITY":
 			pass
 
 	def train_Cw(self,Xs,Y,W=[],tikho=0):
@@ -369,7 +369,7 @@ class ESN(MTS_Model):
 			self.update(u)
 
 		T = U.shape[0]
-		X_vec = np.zeros([T,self.N])
+		X_vec = np.zeros([T-1,self.N])
 
 		for i,u in enumerate(U[:-1]):
 			X = self.update(u)
@@ -380,6 +380,7 @@ class ESN(MTS_Model):
 			Y_vec = U[1:,:]
 		else:
 			Y_vec = y[burn_in:]
+			Y_vec = Y_vec[:-1]
 			W_vec = np.ones_like(Y_vec)
 			W_vec[Y_vec==1] = self.pos_w
 			self.weights.append(W_vec)
@@ -414,6 +415,8 @@ class ESN(MTS_Model):
 			self.train_Cw(Xs,Y,W=W)
 
 		#self.plot_activations()
+		self.plot_activations_reference_times()
+		#self.plot_activations_single_nodes(10)
 		return X_res
 		
 	def plot_activations(self):
@@ -440,9 +443,29 @@ class ESN(MTS_Model):
 
 		plt.show()
 
+	def plot_activations_reference_times(self):
+		X = np.concatenate(self.inputs,axis=0)
+		#times = [27,28,29,-3,-2,-1]
+
+		plt.imshow(X.T[:,:],interpolation='none',aspect='auto')
+		plt.show()
+
+	def plot_activations_single_nodes(self,num_nodes):
+		X = np.concatenate(self.inputs,axis=0)
+		
+		node_idxs = np.random.choice(self.N,num_nodes,replace=False)
+		for idx in node_idxs:
+			plt.figure()
+			plt.plot(X[:,idx])
+
+		plt.show()
+
+
 	def reduce(self,X,return_score=False,Y=[]):
 		if mod_aux.is_tensor(X,1):
 			X = X.T
+
+		X_res = 0
 
 		if self.selection == "SIG_NODES":
 			Xs = X[:,self.sig_nodes]
@@ -457,8 +480,6 @@ class ESN(MTS_Model):
 				corr = mod_aux.normalize_corr_mat(dep)
 				for row in corr:
 					print(" ".join(["{0:.3f}".format(elem) for elem in row]))
-				
-			X_res = 0
 
 		elif self.selection in ["SVD","SVD_SEP"]:
 			Xs = np.dot(X,self.Cs.T)
@@ -505,8 +526,6 @@ class ESN(MTS_Model):
 				plt.legend(legends)
 				plt.show()
 
-			X_res = 0
-
 		elif self.selection == "K_MEANS":
 			Xs_pos = self.kmeans_pos.transform(X)
 			Xs_neg = self.kmeans_neg.transform(X)
@@ -536,9 +555,9 @@ class ESN(MTS_Model):
 			'''
 
 			#Xs = X_single
-			
 
-			X_res = 0
+		elif self.selection == "IDENTITY":
+			Xs = X
 
 		if mod_aux.is_tensor(X,1):
 			Xs = Xs.T

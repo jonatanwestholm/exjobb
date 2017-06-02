@@ -71,6 +71,14 @@ def sin_signal(num,period):
 	signal = signal.reshape([num,1])
 	return signal
 
+def curve(num,start,end,style):
+	if style == "LINEAR":
+		return np.linspace(start,end,num)
+	elif style == "EXPONENTIAL":
+		start = np.log10(start)
+		end = np.log10(end)
+		return np.logspace(start,end,num)
+
 def varma_sim(C,A,T):
 	# determine orders
 	k = np.shape(C)[0]
@@ -176,6 +184,8 @@ def mixed_varma(T,case,settings={},return_A_C=False):
 	return y
 
 def esn_sim(T,case):
+	switch_time = 5
+
 	if case == "thres_sum_waves":
 		switch = square_signal(T,100)
 		switch = switch*2 - 1
@@ -224,10 +234,59 @@ def esn_sim(T,case):
 		high_arr = np.random.random([T-switch_time,1])<high_prob
 		y = np.concatenate([low_arr,high_arr])
 		y = np.array(y,dtype=float)
+	elif case == "impulse":
+		y = np.zeros([T,1])
+		y[0] = 1
+	elif case == "step":
+		y = np.ones([T,1])	
+	elif case == "noise":
+		y = np.random.normal(0,1,[T,1])
 
 	gt = np.zeros([T,1])
 	gt[switch_time:] = 1
 
+	if case == "order_test":
+		a = np.array([0,1,1,-1,0,1])
+		b = np.array([0,1,-1,1,0,1])
+		n = len(a)
+		y = np.zeros([T,1])
+
+		y[:n,0] = a 
+		y[-n:,0] = b
+
+	elif case == "amplitude_test":
+		n = 30
+		a = sin_signal(n,3.14)
+		y = np.zeros([T,1])
+		y[:n,:] = a*0.2 + 1
+		y[-n:,:] = a*0.05 + 1
+
+	elif case == "character_test":
+		n = 50
+		k = 10
+		a = np.ones([n,])
+		b = copy.copy(a)
+		a[-k:] = curve(k,1,np.exp(-1-4*np.random.random()),"LINEAR")
+		b[-k:] = curve(k,1,np.exp(-1-4*np.random.random()),"EXPONENTIAL")
+
+		y = np.zeros([T,1])
+		y[:n,0] = b
+		y[-n:,0] = a
+		n = k
+
+	elif case == "denoising_test":
+		n = 30
+		y = sin_signal(T,15)
+		y += 0.2*np.random.normal(0,1,[T,1])
+		y[n:-n] = 0
+
+	if "_test" in case:
+		gt = np.zeros([T,1])
+		gt[-n:,0] = 1
+
+		plt.plot(y)
+		plt.show()
+	
 	return y,gt
 
 def read_pat(filename,elemsep,linesep,pat):

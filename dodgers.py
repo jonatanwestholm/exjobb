@@ -169,7 +169,7 @@ def main(args):
 				print(row)
 		intensity = np.array([int(row[3]) for row in data])
 		data = [row[1:] for row,ints in zip(data,intensity) if ints != -1]
-		T = 48
+		T = 48*7
 		num_subspace = 3
 		raw_intensity = intensity.reshape([int(len(intensity)/2),2])
 		intensity_out = preprocess(raw_intensity[:,0],T,num_subspace,lag)
