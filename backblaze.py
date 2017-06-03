@@ -14,6 +14,8 @@ import preprocessing as pp
 
 BB_SMART_order = [1,2,3,4,5,7,8,9,10,11,12,13,15,22,183,184,187,188,189,190,191,192,193,194,195,196,197,198,199,200,201,220,222,223,224,225,226,240,241,242,250,251,252,254,255]
 normalized_idx = list(range(5,95,2))
+critical_SMART = [5,187,188,197,198]
+fail_location = 4 # column where failure is reported
 
 min_sample_time = 30
 
@@ -39,6 +41,27 @@ def smart_expl(idx):
 	except KeyError:
 		expl = "S.M.A.R.T feature " + str(BB_SMART_order[idx])
 	return key,expl
+
+def caught_failure(dat,name,qualified):
+	if not "_fail" in name:
+		return False
+
+	critical_idxs = [qualified.index(i) for i in critical_SMART if i in qualified]
+	final_values = dat[-1,critical_idxs]
+	print(final_values)
+
+	critical_values = np.sum(final_values[:-2] < 100)
+	print(final_values[:-2] < 100)
+	#assumes that 197 and 198 are reported. Checks out with data
+	critical_values += np.any(final_values[-2:] < 100) # because 197 and 198 are very correlated
+	print(final_values[-2:] < 100)
+	print(critical_values)
+
+	return critical_values >= 2
+
+def remove_caught_failures(data,names,qualified):
+	no_predicted_fail = [i for i in range(len(data)) if not caught_failure(data[i],names[i],qualified)]
+	return [data[i] for i in no_predicted_fail], no_predicted_fail
 
 def melt_instance(args,dir_name,pattern,serial_location,model_location):
 	target = args.target
@@ -73,7 +96,6 @@ def melt_instance(args,dir_name,pattern,serial_location,model_location):
 				f.write(pp.write_line(line + [args.linesep],args.elemsep))
 				f.close()
 
-				fail_location = 4 # column where failure is reported
 				if line[fail_location] == '1':
 					os.rename(target+name+'.csv',target+name+'_fail.csv')
 			else:
@@ -125,6 +147,12 @@ def main(args):
 		#print("Argmax numeric: " + str(np.argmax(numeric_per_row)))
 
 		if __name__ == '__main__':
+			names = just_the_names(filenames)
+			# Data selection
+			data = [dat[:,normalized_idx] for dat in data]
+			#dead_rows(data,filenames)
+			data = remove_caught_failures(data,names)
+
 			max_length = max(map(lambda x: np.shape(x)[0],data))
 
 			x_range = list(range(-max_length+1,1))
@@ -137,7 +165,7 @@ def main(args):
 			#	x = input('Which feature do you want to look at? ')
 			#	x = int(x)
 			i = 0
-			for x in range(5,np.shape(data[0])[1],2):
+			for x in range(data[0].shape[1]):
 				plotted = False
 				
 				for dat,filename in zip(data,filenames):
@@ -179,9 +207,11 @@ def main(args):
 			plt.show()
 
 		else:
+
+			names = just_the_names(filenames)
 			# Data selection
 			data = [dat[:,normalized_idx] for dat in data]
-			dead_rows(data,filenames)
+			dead_rows(data,names)
 
 			idxs = set(all_smart_except([194]))
 			print(idxs)
@@ -191,20 +221,27 @@ def main(args):
 			#print(pp.changing_idxs(data))
 			idxs = set.intersection(idxs,set(pp.changing_idxs(data)))
 			print(idxs)
+			print("Qualified indexes: " + str(sorted(idxs)))
+			print("Qualified indexes: " + str(sorted([BB_SMART_order[i] for i in idxs])))
+			qualified = sorted([BB_SMART_order[i] for i in idxs])
 			
 			data = [dat[:,sorted(idxs)] for dat in data]
 			keys = [smart_expl(i)[0] for i in sorted(idxs)]
 			explanations = [smart_expl(i)[1] for i in sorted(idxs)]
 
-			print("before removing missing and small: "+ str(len(data)))
-			data,__ = pp.remove_instances_with_missing(data)
-			data = pp.remove_small_samples(data,min_sample_time)
-			print("after removing missing and small: "+ str(len(data)))
+			print("before removing missing, small, and predicted failures: "+ str(len(data)))
+			__, no_missing = pp.remove_instances_with_missing(data)
+			__, no_small = pp.remove_small_samples(data,min_sample_time)
+			__, no_predicted_failures = remove_caught_failures(data,names,qualified)
+			cleared_idxs = set.intersection(set(no_missing),set(no_small),set(no_predicted_failures))
+			data = [data[idx] for idx in cleared_idxs]
+			names = [names[idx] for idx in cleared_idxs]
+			print("after removing missing, small, and predicted failures: "+ str(len(data)))
 
 			# Mathematical preprocessing
 			# add 0 to beginning
-			num_features = len(idxs)
-			data = [np.concatenate([np.zeros([1,num_features]),dat],axis=0) for dat in data]
+			#num_features = len(idxs)
+			#data = [np.concatenate([np.zeros([1,num_features]),dat],axis=0) for dat in data]
 
 			extended_features = False
 			if extended_features:		
@@ -219,17 +256,15 @@ def main(args):
 				expl_ext = [expl + " (modified)" for expl in explanations]
 				explanations = explanations + expl_ext
 			else:
-				data = pp.differentiate(data)
+				pass
+				#data = pp.differentiate(data)
 				#sdata = pp.smooth(data,5)
 				#data = pp.filter(data,np.array([1]),np.array([1,-0.8]))
 
 			data = pp.normalize_all(data,leave_zero=True)
-			print("Qualified indexes: " + str(sorted(idxs)))
 			#print(explanations)
 			#print(keys)
 			print("Explanations " + " ".join(["{0:s}: {1:s}".format(str(key),str(explanation)) for key, explanation in zip(keys,explanations)]))
-
-			names = just_the_names(filenames)
 
 			if args.test_type == "PREDICTION":
 				gt = []

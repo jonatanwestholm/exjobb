@@ -160,7 +160,8 @@ def changing_idxs(data):
 ## Managing data
 
 def remove_small_samples(data,limit):
-	return [dat for dat in data if np.shape(dat)[0] > limit]
+	no_small = [i for i in range(len(data)) if data[i].shape[0] > limit]
+	return [data[i] for i in no_small], no_small
 
 def has_missing(dat):
 	return np.any(np.isnan(dat))

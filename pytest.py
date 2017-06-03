@@ -5,7 +5,18 @@ import scipy.signal as ssignal
 import matplotlib.pyplot as plt
 
 
+thres = 16
 
+eps = 0.0001
+f = lambda x: ((int(x/eps)+thres*(int(x/eps)==0)-1)%thres)*eps
+
+x = 3
+
+for i in range(40):
+	print(x)
+	x = f(x)
+
+'''
 num_iter = 1
 
 N = 4
@@ -24,3 +35,4 @@ for y,C in zip(y_arr,C_arr):
 	plt.plot(y)
 
 plt.show()
+'''

@@ -30,21 +30,23 @@ backblaze = {#"min_subgroup_length": 3, "max_subgroup_length": 6, "subgroup_leng
 			"ESN_classifier": "SVM" #, "ESN_sig_limit": 1.1
 			}
 
-dodgers = {#"train_share": 0.4, "test_share": 0.3, # splitting
-		   "train_share": 0.7, "test_share": 0.3, # splitting
+dodgers = {"train_share": 0.4, "test_share": 0.3, # splitting
+		   #"train_share": 0.7, "test_share": 0.3, # splitting
 			"pos_w": 2, # classification and regression
-			"ESN_spec": [#("RODAN", {"N": 500,"v":0}),
-						("RODAN",{"N":1000,"v":0.5,"r":0.5}),
-						("VAR", {"p": 10}),
-						("THRES", {"N": 200,"random_thres":True,"direct_input":True}),
+			"ESN_spec": [("RODAN", {"N": 200,"v":0}),
+						("RODAN",{"N":200,"v":0.5,"r":0.5}),
+						("EXPDELAY", {"N": 50, "order": 3, "direct_input": False}),
+						#("VAR", {"p": 10}),
+						#("THRES", {"N": 200,"random_thres":True,"direct_input":True}),
 						#("TRIGGER", {"N": 500,"random_thres": True,"direct_input":True}),
-						("LEAKY", {"N": 200, "r": 0.9,"v":0.3}),
+						#("LEAKY", {"N": 200, "r": 0.9,"v":0.3}),
 						#("HEIGHTSENS", {"N": 200, "random_thres": True}),
 						#("DIRECT",{}),
 						],
 			"ESN_size_out": 20, # ESN
 			"ESN_burn_in": 10,"ESN_batch_train" : True,"ESN_tikhonov_const": 3,  # ESN training
-			"ESN_mixing": [("RODAN","RODAN",1),("LEAKY","THRES",100),("THRES","RODAN",50),("RODAN","LEAKY",200),("VAR","THRES",10),("VAR","RODAN",10)],
+			"ESN_mixing": [("RODAN","RODAN",1),("LEAKY","THRES",100),("THRES","RODAN",50),("RODAN","LEAKY",200),("VAR","THRES",10),("VAR","RODAN",10),
+							("RODAN","EXPDELAY",50,False,1),("EXPDELAY","RODAN",150,False,1)],
 			#"ESN_rebuild_types": ["THRES","TRIGGER"], "ESN_rebuild_iterations": 1, "ESN_impact_limit": 1e-2,
 			"ESN_feature_selection": "SVD_SEP",
 			"ESN_classifier": "LINEAR"
@@ -73,26 +75,28 @@ occupancy = {#"train_share": 0.4, "test_share": 0.4, "self_test": True,# splitti
 
 esn_sim = {#"train_share": 0.4, "test_share": 0.4, "self_test": True,# splitting
 			"train_share": 0.5, "test_share": 0.5, "self_test": False,# splitting
-			"num_samples": 10, #Simulation of data
-			"num_timepoints": 150,
-			"ESN_sim_case": "amplitude_test",
+			"num_samples": 2, #Simulation of data
+			"num_timepoints": 500,
+			"ESN_sim_case": "step",
 			"pos_w": 10, # classification and regression
-			"ESN_spec": [#("RODAN", {"N": 500,"v":0}),
-						("RODAN",{"N": 50,"v":0.5,"r":0.8}),
+			"ESN_spec": [("DIRECT",{}),
+						#("CHAIN", {"order": 4, "v": 0.5, "r": 0.5}),
+						#("RODAN", {"N": 100,"v":0,"r": 0.5}),
+						#("RODAN",{"N": 200,"v":0.5,"r":0.5}),
+						("EXPDELAY", {"N": 5, "order": 5, "direct_input": False}),
 						#("VAR", {"p": 5}),
-						("THRES", {"N": 30,"random_thres":True,"direct_input":True}),
+						#("THRES", {"N": 50,"random_thres":True,"direct_input":True}),
 						#("TRIGGER", {"N": 500,"random_thres": True,"direct_input":True}),
 						#("LEAKY", {"N": 100, "r": 0.7,"v":1}),
 						#("LEAKY", {"N":100,"r":0.9,"v":0}),
 						#("HEIGHTSENS", {"N": 200, "random_thres": True}),
-						#("DIRECT",{}),
 						],
-			"ESN_size_out": 10, # ESN
+			"ESN_size_out": 2, # ESN
 			"ESN_burn_in": 0,"ESN_batch_train" : True,"ESN_tikhonov_const": 1,  # ESN training
-			"ESN_mixing": [("RODAN","RODAN",0),("LEAKY","RODAN",50),("THRES","LEAKY",100),("VAR","RODAN",50),("RODAN","THRES",50),("THRES","RODAN",50)],
+			"ESN_mixing": [("DIRECT","EXPDELAY",5,True),("RODAN","RODAN",0,False),("RODAN","EXPDELAY",50,False,1),("EXPDELAY","RODAN",50,False,1)],
 			#"ESN_rebuild_types": ["THRES","TRIGGER"], "ESN_rebuild_iterations": 1, "ESN_impact_limit": 1e-2,
 			"ESN_feature_selection": "SVD_SEP",
-			"ESN_classifier": "MLP" #, "ESN_sig_limit": 0.1,
+			"ESN_classifier": "LINEAR" #, "ESN_sig_limit": 0.1,
 			}
 
 settings = {"DODGERS": dodgers, "OCCUPANCY": occupancy, "BACKBLAZE": backblaze,"ESN_SIM": esn_sim}

@@ -7,9 +7,16 @@ import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
 
 esn_component_sizes = {"VAR":1,"RODAN":1,"DIRECT":1,"THRES":2,"TRIGGER":3}
+chain = [0,np.array([0,1]),np.array([0,0,1,1,0]),np.array([0,0,0,1,1,1,0,0,1,0,1]),np.array([0,0,0,0,1,1,1,1,0,0,0,1,0,0,1,0,1,1,0,1,0])]
 
-THRES_HIGH = 100000
+THRES_HIGH = 100000000
+eps = 0.00001
 TH = THRES_HIGH
+
+def print_mat(mat):
+	print()
+	for row in mat:
+		print("".join(["{0:.3f}".format(elem).rjust(10,' ') for elem in row]))
 
 # turns list of lists into list
 def flatten(lst):
@@ -209,8 +216,8 @@ def color_ranking(X,Y):
 	plt.show()
 
 def cumulative_singular_values(S,plot=False):
-	S_energy = np.cumsum(S)
-	S_energy = S_energy/S_energy[-1]
+	S_energy = S#np.cumsum(S)
+	S_energy = S_energy#/S_energy[-1]
 	if plot:
 		plt.plot(S_energy)
 		plt.title("Cumulative singular values")
@@ -359,12 +366,16 @@ def ESN_f(architecture,thres=0):
 		f = lambda x: np.tanh(x)
 	elif architecture == "POSLIN":
 		f = lambda x: (x>thres)*(x-thres)
+	elif architecture == 'POSNEG_LIN':
+		f = lambda x: (x>thres)*x
 	elif architecture == "DOUBLE_POSLIN":
 		f = lambda x: (np.abs(x)>thres)*x + (np.abs(x)<=thres)*thres
 	elif architecture == "THRES":
 		f = lambda x: (x>thres)*1.0
 	elif architecture == "INVERSE_DECAY":
 		f = lambda x: x - thres**2/x
+	elif architecture == "COUNTER":
+		f = lambda x: ((np.floor(x/eps)+thres*(np.floor(x/eps)==0)-1)%thres)*eps
 
 	return f
 
@@ -418,6 +429,39 @@ def make_trigger(M, N, direct_input, random_thres, turn_on):
 		A = sparse.diags([main_diag,-lower_diag],[0,-N])
 
 	A = A.tocsr()
+	return A,B,f
+
+def make_expdelay(M, N, order, direct_input):
+	size = order*N
+	A2A = np.eye(size)
+	B2A = np.diag(0.5*np.ones(size-N),-N)
+	for i in range(size):
+		B2A[i,i] = -1
+	C2A = np.zeros([size,size])
+
+	A2B = np.eye(size)
+	B2B = np.zeros([size,size])
+	C2B = -2*TH*np.eye(size)
+
+	A2C = np.zeros([size,size])
+	B2C = np.zeros([size,size])
+	C2C = np.eye(size)
+
+	A2 = np.concatenate([A2A,A2B,A2C],axis=0)
+	B2 = np.concatenate([B2A,B2B,B2C],axis=0)
+	C2 = np.concatenate([C2A,C2B,C2C],axis=0)
+
+	A = np.concatenate([A2,B2,C2],axis=1)
+	#print_mat(A)
+	A = sparse.csr_matrix(A)
+
+	B = B = ESN_B("SELECTED",M,3*size)
+	B[N:,:] = 0
+	if not direct_input:
+		B[:N,:] = 0
+
+	f = [ESN_f("LIN"),ESN_f("POSNEG_LIN",-TH*eps)]+[ESN_f("COUNTER",2**i) for i in range(1,order+1)]
+
 	return A,B,f
 
 class Node:
@@ -538,7 +582,7 @@ class LEAKY(Component):
 		self.f = [ESN_f("LIN")]
 
 class RODAN(Component):
-	def __init__(self,M,N,r=0.5,v=1):
+	def __init__(self,M,N,r=0.5,v=0.5):
 		super(RODAN,self).__init__(N)
 		self.M = M
 		self.N_init = N
@@ -551,12 +595,45 @@ class RODAN(Component):
 		N = self.N_init
 		self.A = ESN_A("DLR",self.N,r=self.r)
 		self.B = ESN_B("SECTIONS",M,N,v=self.v)
-		self.B = self.B*np.random.normal(0,1,[N,1])
+		self.B = self.B #*np.random.normal(0,1,[N,1])
 		#print(self.B)
 		self.f = [ESN_f("TANH")]
 
 	def get_input_idx(self):
 		return list(range(self.input_idx,self.get_output_idx()))
+
+class CHAIN(Component):
+	def __init__(self,M,order,r=0.5,v=0.5):
+		super(CHAIN,self).__init__(M*len(chain[order]))
+		self.M = M
+		self.order = order
+		self.r = r 
+		self.v = v
+		self.chain_length = len(chain[self.order])
+		self.chain = 2*chain[self.order]-1
+		self.build()
+
+	def build(self):
+		M = self.M
+		N = self.N
+		self.A = ESN_A("DLR",self.N,r=self.r)
+		# Remove connections between feature chains
+		A = self.A.tolil()
+		for i in range(1,M):
+			j = i*self.chain_length
+			A[j,j-1] = 0
+		self.A = A.tocsr()
+		# #
+		self.B = ESN_B("SECTIONS",M,N,v=0)
+		# Set input patterns for chains
+		B = self.B
+		for i in range(M):
+			start = i*self.chain_length
+			end = (i+1)*self.chain_length
+			B[start:end,i] = self.chain
+		self.B = B
+		#print(self.B)
+		self.f = [ESN_f("TANH")]
 
 class THRES(Component):
 	def __init__(self,M,N,direct_input=True,random_thres=False,turn_on=True):
@@ -625,6 +702,36 @@ class TRIGGER(Component):
 	def get_output_nodes(self):
 		return self.nodes[-self.number:]
 
+class EXPDELAY(Component):
+	def __init__(self,M,N,order,direct_input=True):
+		super(EXPDELAY,self).__init__(3*order*N)
+		self.number = N
+		self.M = M
+		self.order = order
+		self.direct_input = direct_input
+		self.build()
+
+	def build(self):
+		M = self.M
+		order = self.order
+		direct_input = self.direct_input
+		self.A,self.B,self.f = make_expdelay(M,self.number,self.order,direct_input)
+
+	#def build_nodes(self,input_idx):
+	#	self.set_input_idx(input_idx)
+	#	self.nodes = [Node(self.input_idx,self.get_output_idx())]
+
+	def get_index_groups(self):
+		start = self.input_idx
+		N = self.number*self.order
+		return [(start+0*N,start+1*N),(start+1*N,start+2*N)]+[(i,i+self.number) for i in range(start+2*N,start+3*N,self.number)]
+
+	def get_input_nodes(self):
+		return self.nodes[:self.number]
+
+	def get_output_nodes(self):
+		return self.nodes[:self.number*self.order]
+
 class HEIGHTSENS(Component):
 	def __init__(self,M,N,random_thres):
 		super(HEIGHTSENS,self).__init__(N)
@@ -652,10 +759,10 @@ class HEIGHTSENS(Component):
 # archs = [(row,column), ...]
 
 class Reservoir:
-	def __init__(self,M,spec,mixing_spec,replace):
+	def __init__(self,M,spec,mixing_spec):
 		self.build(M,spec)
 		self.build_nodes()
-		self.mix(mixing_spec,replace)
+		self.mix(mixing_spec)
 
 	def get_matrices(self):
 		A = self.get_reservoir_matrix()
@@ -690,10 +797,14 @@ class Reservoir:
 				comp = [LEAKY(M,**comp_spec)]
 			elif key == "RODAN":
 				comp = [RODAN(M,**comp_spec)]
+			elif key == "CHAIN":
+				comp = [CHAIN(M,**comp_spec)]
 			elif key == "THRES":
 				comp = [THRES(M,**comp_spec)]
 			elif key == "TRIGGER":
 				comp = [TRIGGER(M,**comp_spec)]
+			elif key == "EXPDELAY":
+				comp = [EXPDELAY(M,**comp_spec)]
 			elif key == "HEIGHTSENS":
 				comp = [HEIGHTSENS(M,**comp_spec)]
 			else:
@@ -705,7 +816,7 @@ class Reservoir:
 
 		self.components = components
 
-	def mix(self,mixing_spec,replace):
+	def mix(self,mixing_spec):
 		for transfer in mixing_spec:
 			sources = self.get_output_nodes_of_type(transfer[0])
 			targets = self.get_input_nodes_of_type(transfer[1])
@@ -715,10 +826,17 @@ class Reservoir:
 
 			if sources != [] and targets != []:
 				num = transfer[2]
+				if len(transfer) > 3:
+					replace = transfer[3]
+				else:
+					replace = False
 				selected_sources = np.random.choice(sources,num,replace)
 				selected_targets = np.random.choice(targets,num,replace)
 
-				weight = 0.5
+				if len(transfer) > 4:
+					weight = transfer[4]
+				else:
+					weight = 0.5
 				for source,target in zip(selected_sources,selected_targets):
 					source.set_output(target,weight)
 					target.set_input(source,weight)

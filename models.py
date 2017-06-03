@@ -215,7 +215,7 @@ class ESN(MTS_Model):
 		self.Binary_Oh = 0
 		self.L = size_label
 		
-		self.reservoir = mod_aux.Reservoir(self.M,spec,mixing,True)
+		self.reservoir = mod_aux.Reservoir(self.M,spec,mixing)
 		self.A,self.B,self.f,self.idx_groups = self.reservoir.get_matrices()
 		#self.reservoir.print_reservoir()
 		#for row in self.A.toarray():
@@ -314,7 +314,7 @@ class ESN(MTS_Model):
 			print("{0:d} significant nodes".format(len(self.sig_nodes)))
 
 		elif self.selection == "SVD":
-			self.Cs = mod_aux.fit_svd(X,self.Oh)
+			self.Cs = mod_aux.fit_svd(X,self.Oh,plot=True)
 
 		elif self.selection in ["SVD_SEP"]:
 			X_pos = X[np.where(Y==1)[0],:]
@@ -414,8 +414,9 @@ class ESN(MTS_Model):
 			W = np.concatenate(self.weights,axis=0)
 			self.train_Cw(Xs,Y,W=W)
 
-		#self.plot_activations()
-		self.plot_activations_reference_times()
+		#mod_aux.print_mat(X.T)
+		self.plot_activations()
+		#self.plot_activations_reference_times()
 		#self.plot_activations_single_nodes(10)
 		return X_res
 		
