@@ -415,7 +415,7 @@ class ESN(MTS_Model):
 			self.train_Cw(Xs,Y,W=W)
 
 		#mod_aux.print_mat(X.T)
-		self.plot_activations()
+		#self.plot_activations()
 		#self.plot_activations_reference_times()
 		#self.plot_activations_single_nodes(10)
 		return X_res

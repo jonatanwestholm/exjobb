@@ -1,4 +1,4 @@
-# backblaze.py
+# dodgers.py
 
 import argparse
 import os
@@ -105,7 +105,16 @@ def main_linear_subspace(dat,coverage):
 	else:
 		k = min(np.where(cum_rel>coverage)[0])
 	print("subspace dimensionality: " +str(k))
+	'''
+	for idx,row in enumerate(V[:k,:]):
+		plt.plot(row*S[idx])
 
+	plt.legend([str(i+1) for i in range(k)])
+	plt.xlabel('Time of day sample no.')
+	plt.ylabel('Value')
+	plt.title('First principal components')
+	plt.show()
+	'''
 	return V[:k,:]
 
 def lagged_features(intensity,lag):
@@ -115,21 +124,41 @@ def lagged_features(intensity,lag):
 
 	return features
 
-def preprocess(intensity,T,num_subspace,lag):
+def preprocess(intensity,gt,T,num_subspace,lag):
 	intensity = intensity/np.std(intensity) #pp.normalize(intensity,leave_zero=True)
 
 	X = make_cycle_data(intensity,T)
-	Cs = main_linear_subspace(X,num_subspace)
+	'''
+	for row in X[:10,:]:
+		plt.plot(row)
+	plt.show()
+	'''
+	gt = make_cycle_data(gt,T)	
+	gt = np.array([gt_row for row,gt_row in zip(X,gt) if not np.sum(row<0)]) # remove days with missing values
+	#print(X.shape)
+	X = np.array([row for row in X if not np.any(row<0)])
+	#print(X.shape)
+	'''
+	for row in X[:10,:]:
+		plt.plot(row)
+	plt.xlabel('Time of day sample no.')
+	plt.ylabel('No. people/ 3 mins')
+	plt.title('Day samples')
+	plt.show()
+	'''
+	X_no_event = [row for row,gt_row in zip(X,gt) if not np.sum(gt_row)]
+	Cs = main_linear_subspace(X_no_event,num_subspace)
 	#print(X.shape)
 	#print(Cs.shape)
 	X = X - np.dot(np.dot(X,Cs.T),Cs)
 	numel = np.prod(X.shape)
 	intensity = X.reshape([numel,1])
+	gt = gt.reshape([numel,1])
 	intensity = pp.smooth(intensity,1)
 	
 	intensity = lagged_features(intensity,lag)
 
-	return intensity
+	return intensity,gt
 
 def main(args):
 	filename = args.filename
@@ -155,33 +184,34 @@ def main(args):
 	#data.remove([])
 	data = list(filter(([]).__ne__,data))
 
-	if name == "Dodgers":
-		intensity = np.array([int(row[2]) for row in data])
-		data = [row for row,ints in zip(data,intensity) if ints != -1]
-		T = 288
-		num_subspace = 4
-		intensity = intensity[np.where(intensity!=-1)[0]]
-		raw_intensity = intensity.reshape([len(intensity),1])
-		intensity = preprocess(intensity,T,num_subspace,lag)
-	elif name == "CalIt2":
-		for row in data:
-			if len(row) < 4:
-				print(row)
-		intensity = np.array([int(row[3]) for row in data])
-		data = [row[1:] for row,ints in zip(data,intensity) if ints != -1]
-		T = 48*7
-		num_subspace = 3
-		raw_intensity = intensity.reshape([int(len(intensity)/2),2])
-		intensity_out = preprocess(raw_intensity[:,0],T,num_subspace,lag)
-		intensity_in = preprocess(raw_intensity[:,1],T,num_subspace,lag)
-		intensity = np.concatenate([intensity_in,intensity_out],axis=1)
+	if name == "CalIt2":
+		data = [row[1:] for row in data]
 
 	event_times = [Time_interval(event[0],event[1],event[2]) for event in events]
 	gt = generate_gt(data,event_times)
 	gt = gt[lag:]
 
-	if name == "CalIt2":
+	if name == "Dodgers":
+		intensity = np.array([int(row[2]) for row in data])
+		#data = [row for row,ints in zip(data,intensity) if ints != -1]
+		T = 288
+		num_subspace = 2
+		#intensity = intensity[np.where(intensity!=-1)[0]]
+		raw_intensity = intensity.reshape([len(intensity),1])
+		intensity,gt = preprocess(intensity,gt,T,num_subspace,lag)
+	elif name == "CalIt2":
+		for row in data:
+			if len(row) < 3:
+				print(row)
+		intensity = np.array([int(row[2]) for row in data])
 		gt = gt[::2]
+		#data = [row[1:] for row,ints in zip(data,intensity) if 1 ] #ints != -1]
+		T = 48
+		num_subspace = 3
+		raw_intensity = intensity.reshape([int(len(intensity)/2),2])
+		intensity_out,gt = preprocess(raw_intensity[:,0],gt,T,num_subspace,lag)
+		intensity_in,__ = preprocess(raw_intensity[:,1],gt,T,num_subspace,lag)
+		intensity = np.concatenate([intensity_in,intensity_out],axis=1)
 
 	'''
 	print(gt.shape)
@@ -192,7 +222,7 @@ def main(args):
 
 	explanations = ["intensity"]
 
-	if __name__ == '__main__':
+	if 0: #__name__ == '__main__':
 		plt.figure()
 		plt.plot(raw_intensity[:,0]/10,"b")
 		plt.plot(intensity[:,0],"g")

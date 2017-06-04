@@ -8,10 +8,19 @@ import matplotlib.pyplot as plt
 import glob
 import preprocessing as pp
 
-#explanations = ["Temperature","Humidity","Light","CO2","HumidityRatio"]
+explanations = ["EEG {0:d}".format(i) for i in range(14)]
 
 def just_the_names(filenames):
 	return [filename.split('/')[-1][:-4] for filename in filenames]
+
+def neutralize_outliers(dat):
+	for i in range(dat.shape[1]):
+		feat = dat[:,i]
+		feat_mean = np.mean(feat)
+		outliers = np.where(np.abs(feat - feat_mean) > 200)[0]
+		dat[outliers,i] = feat_mean
+
+	return dat
 
 def main(args):
 	filename = args.filename
@@ -28,21 +37,24 @@ def main(args):
 		#print(sorted(filenames,reverse=False))
 		print(names)
 
-		feature_idxs = [2,3,4,5,6]
-		gt_idx = [7]
+		feature_idxs = [0,1,2,3,4,5,6,7,8,9,10,11,12,13]
+		gt_idx = [14]
 
 		data = [pp.read_file(filename,elemsep=args.elemsep,linesep=args.linesep,readlines=args.readlines) for filename in sorted(filenames,reverse=True)]
 		for dat in data:
 			dat.remove([])
 
 		data = [np.array(dat) for dat in data]
-		data = [dat[1:,:] for dat in data]
+		#data = [dat[1:,:] for dat in data]
+		data = [neutralize_outliers(dat) for dat in data]
+		#data = pp.normalize_all(data,leave_zero=True)
 
 		'''
 		for feat in feature_idxs:
 			plt.figure()
 			for dat in data:
 				plt.plot(dat[:,feat])
+				plt.plot(dat[:,gt_idx])
 
 		plt.show()
 		'''

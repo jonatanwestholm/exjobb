@@ -48,14 +48,14 @@ def caught_failure(dat,name,qualified):
 
 	critical_idxs = [qualified.index(i) for i in critical_SMART if i in qualified]
 	final_values = dat[-1,critical_idxs]
-	print(final_values)
+	#print(final_values)
 
 	critical_values = np.sum(final_values[:-2] < 100)
-	print(final_values[:-2] < 100)
+	#print(final_values[:-2] < 100)
 	#assumes that 197 and 198 are reported. Checks out with data
 	critical_values += np.any(final_values[-2:] < 100) # because 197 and 198 are very correlated
-	print(final_values[-2:] < 100)
-	print(critical_values)
+	#print(final_values[-2:] < 100)
+	#print(critical_values)
 
 	return critical_values >= 2
 
@@ -151,7 +151,8 @@ def main(args):
 			# Data selection
 			data = [dat[:,normalized_idx] for dat in data]
 			#dead_rows(data,filenames)
-			data = remove_caught_failures(data,names)
+			qualified = BB_SMART_order
+			#data,__ = remove_caught_failures(data,names,qualified)
 
 			max_length = max(map(lambda x: np.shape(x)[0],data))
 
@@ -232,7 +233,10 @@ def main(args):
 			print("before removing missing, small, and predicted failures: "+ str(len(data)))
 			__, no_missing = pp.remove_instances_with_missing(data)
 			__, no_small = pp.remove_small_samples(data,min_sample_time)
-			__, no_predicted_failures = remove_caught_failures(data,names,qualified)
+			if 0:
+				__, no_predicted_failures = remove_caught_failures(data,names,qualified)
+			else:
+				no_predicted_failures = list(range(len(data)))
 			cleared_idxs = set.intersection(set(no_missing),set(no_small),set(no_predicted_failures))
 			data = [data[idx] for idx in cleared_idxs]
 			names = [names[idx] for idx in cleared_idxs]
