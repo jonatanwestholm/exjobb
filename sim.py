@@ -183,7 +183,7 @@ def mixed_varma(T,case,settings={},return_A_C=False):
 
 	return y
 
-def esn_sim(T,case):
+def esn_sim(T,case,M=0):
 	switch_time = 5
 
 	if case == "thres_sum_waves":
@@ -280,6 +280,19 @@ def esn_sim(T,case):
 		y = sin_signal(T,15)
 		y += 0.2*np.random.normal(0,1,[T,1])
 		y[n:-n] = 0
+
+	elif case == "PROBE":
+		y = []
+		gt = []
+
+		for i in range(M):
+			y_i = np.zeros([T,M])
+			gt_i = np.zeros([T,1])
+			y_i[:100,i] = 1
+			gt_i[:100] = 1
+			#print(y_i)
+			y.append(y_i)
+			gt.append(gt_i)
 
 	if "_test" in case:
 		gt = np.zeros([T,1])

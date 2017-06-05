@@ -8,7 +8,9 @@ import matplotlib.pyplot as plt
 import glob
 import preprocessing as pp
 
-explanations = ["EEG {0:d}".format(i) for i in range(14)]
+#explanations = ["EEG {0:d}".format(i) for i in range(14)]
+explanations = ["AF3", "F7", "F3", "FC5", "T7", "P7", "O1",
+				"O2", "P8", "T8", "FC6", "F4", "F8", "AF4"]
 
 def just_the_names(filenames):
 	return [filename.split('/')[-1][:-4] for filename in filenames]
@@ -47,15 +49,25 @@ def main(args):
 		data = [np.array(dat) for dat in data]
 		#data = [dat[1:,:] for dat in data]
 		data = [neutralize_outliers(dat) for dat in data]
-		#data = pp.normalize_all(data,leave_zero=True)
 
 		'''
-		for feat in feature_idxs:
-			plt.figure()
-			for dat in data:
-				plt.plot(dat[:,feat])
-				plt.plot(dat[:,gt_idx])
+		gt = [dat[:,gt_idx] for dat in data]
+		data = [dat[:,feature_idxs] for dat in data]	
+		data = pp.normalize_all(data,leave_zero=True)
 
+		x = np.linspace(0,117,14980)
+		print(x.shape)
+		for dat in data:
+			print(dat.shape)
+			plt.figure()
+			for feat in feature_idxs:
+				plt.plot(x,dat[:,feat])
+			plt.plot(x,gt[0]*5,'b')
+
+		plt.xlabel('time / s')
+		plt.ylabel('Normalized EEG value')
+		plt.title('EEG Eye Features')
+		plt.legend(explanations+["Ground Truth"])
 		plt.show()
 		'''
 

@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import glob
 import preprocessing as pp
 
-#explanations = ["Temperature","Humidity","Light","CO2","HumidityRatio"]
+explanations = ["Temperature","Humidity","Light","CO2","HumidityRatio"]
 
 def just_the_names(filenames):
 	return [filename.split('/')[-1][:-4] for filename in filenames]

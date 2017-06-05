@@ -17,7 +17,7 @@ normalized_idx = list(range(5,95,2))
 critical_SMART = [5,187,188,197,198]
 fail_location = 4 # column where failure is reported
 
-min_sample_time = 30
+#min_sample_time = 30
 
 def dead_rows(data,filenames):
 	for dat,filename in zip(data,filenames):
@@ -57,7 +57,7 @@ def caught_failure(dat,name,qualified):
 	#print(final_values[-2:] < 100)
 	#print(critical_values)
 
-	return critical_values >= 2
+	return critical_values >= 1
 
 def remove_caught_failures(data,names,qualified):
 	no_predicted_fail = [i for i in range(len(data)) if not caught_failure(data[i],names[i],qualified)]
@@ -232,8 +232,9 @@ def main(args):
 
 			print("before removing missing, small, and predicted failures: "+ str(len(data)))
 			__, no_missing = pp.remove_instances_with_missing(data)
+			min_sample_time = args.settings["failure_horizon"]+30
 			__, no_small = pp.remove_small_samples(data,min_sample_time)
-			if 0:
+			if 1:
 				__, no_predicted_failures = remove_caught_failures(data,names,qualified)
 			else:
 				no_predicted_failures = list(range(len(data)))

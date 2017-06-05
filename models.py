@@ -442,6 +442,11 @@ class ESN(MTS_Model):
 		axarr[1].scatter(none_idx,[0]*len(none_idx),color='r',marker='*',s=20)
 		axarr[1].legend(self.explanations,loc="upper left",bbox_to_anchor=(1,1))
 
+		print(self.Cw.shape)
+		print(self.Cs.shape)
+		plt.figure()
+		plt.plot(np.dot(self.Cw[0,1:],self.Cs))
+
 		plt.show()
 
 	def plot_activations_reference_times(self):
@@ -616,14 +621,14 @@ class ESN(MTS_Model):
 		self.reset()
 
 class SVM_TS:
-	def __init__(self,subgroup,pos_w,purpose):
-		self.subgroup = subgroup
+	def __init__(self,M,pos_w,purpose):
+		self.M = M
 		self.pos_w = pos_w
 		self.purpose = purpose
 		self.initiate()
 
 	def initiate(self):
-		self.X = np.array([[]]*len(self.subgroup)).T
+		self.X = np.array([[]]*self.M).T
 		self.y = np.array([[]]).T
 		self.w = np.array([[]]).T 
 		if self.purpose == "CLASSIFICATION":
@@ -662,13 +667,12 @@ class SVM_TS:
 		return self.sv.predict(U)
 
 class MLP_TS:
-	def __init__(self,subgroup,purpose):
-		self.subgroup = subgroup
+	def __init__(self,M,purpose):
 		self.purpose = purpose
 		self.initiate()
 
 	def initiate(self):
-		self.X = np.array([[]]*len(self.subgroup)).T
+		self.X = np.array([[]]*self.M).T
 		self.y = np.array([[]]).T
 		self.w = np.array([[]]).T 
 		if self.purpose == "REGRESSION":
