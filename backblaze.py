@@ -4,6 +4,7 @@ import argparse
 import os
 import re
 import numpy as np
+import random
 import matplotlib.pyplot as plt
 import scipy.io
 import collections
@@ -37,7 +38,7 @@ def all_smart_except(remove):
 def smart_expl(idx):
 	try:
 		key = BB_SMART_order[idx]
-		expl = smart_explanations.smart[BB_SMART_order[idx]]
+		expl = "{0:d}: {1:s}".format(key,smart_explanations.smart[BB_SMART_order[idx]])
 	except KeyError:
 		expl = "S.M.A.R.T feature " + str(BB_SMART_order[idx])
 	return key,expl
@@ -232,15 +233,19 @@ def main(args):
 
 			print("before removing missing, small, and predicted failures: "+ str(len(data)))
 			__, no_missing = pp.remove_instances_with_missing(data)
-			min_sample_time = args.settings["failure_horizon"]+30
+			min_sample_time = args.settings["failure_horizon"]+70
 			__, no_small = pp.remove_small_samples(data,min_sample_time)
+			#print(no_small)
 			if 1:
 				__, no_predicted_failures = remove_caught_failures(data,names,qualified)
 			else:
 				no_predicted_failures = list(range(len(data)))
 			cleared_idxs = set.intersection(set(no_missing),set(no_small),set(no_predicted_failures))
-			data = [data[idx] for idx in cleared_idxs]
-			names = [names[idx] for idx in cleared_idxs]
+			cleared_idxs = list(cleared_idxs)
+			#print(cleared_idxs)
+			data = [data[idx] for idx in sorted(cleared_idxs)]
+			#print([len(dat) for dat in data])
+			names = [names[idx] for idx in sorted(cleared_idxs)]
 			print("after removing missing, small, and predicted failures: "+ str(len(data)))
 
 			# Mathematical preprocessing
@@ -266,7 +271,7 @@ def main(args):
 				#sdata = pp.smooth(data,5)
 				#data = pp.filter(data,np.array([1]),np.array([1,-0.8]))
 
-			data = pp.normalize_all(data,leave_zero=True)
+			data = pp.normalize_all(data,leave_zero=True,mean_def=100)
 			#print(explanations)
 			#print(keys)
 			print("Explanations " + " ".join(["{0:s}: {1:s}".format(str(key),str(explanation)) for key, explanation in zip(keys,explanations)]))
@@ -282,7 +287,10 @@ def main(args):
 					X.append(x)
 					Y.append(y)
 
-				data = X
+				#order = np.random.choice(len(X),len(X),replace=False)
+				#data = [X[ord_i] for ord_i in order]
+				#gt = [Y[ord_i] for ord_i in order]
+				#data = X
 				gt = Y
 
 			return data,gt,explanations,names

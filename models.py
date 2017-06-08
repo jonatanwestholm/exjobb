@@ -7,6 +7,8 @@ import time
 from scipy import sparse
 import sklearn.svm as svm
 from sklearn.neural_network import MLPClassifier,MLPRegressor
+from sklearn.model_selection import learning_curve
+import scipy.signal as ssignal
 import matplotlib.pyplot as plt
 
 import models_auxilliary as mod_aux
@@ -35,171 +37,12 @@ class Trivial(MTS_Model):
 
 	def __init__(self):
 		pass
-
+	
 	def update(self,data):
 		self.data = data	
 
 	def predict(self,k):
 		return self.data
-
-class VARMA(MTS_Model):
-
-	def __init__(self,orders):
-		k = orders[0]
-		self.k = k
-		self.p = orders[1]
-		self.q = orders[2]
-		self.A = np.zeros([k,k*self.p])
-		self.C = np.zeros([k,k*self.q])
-		self.Y = [[0]*k]*self.p
-		self.E = [[0]*k]*self.q
-		
-	def reset(self):
-		self.Y = [[0]*self.k]*self.p
-		self.E = [[0]*self.k]*self.q
-
-	def initiate_kalman(self,re,rw):
-		N = self.k*(self.p+self.q)
-		self.learners = [mod_aux.Kalman(N,re,rw) for i in range(self.k)]
-
-	def initiate_rls(self,Y,lamb):
-		self.lamb = lamb
-		N = len(Y)
-		k = self.k
-		p = self.p
-		q = self.q
-		X = np.random.normal(0,1,[N-p,k*(p+q)])
-		#print(X)
-		for i in range(N-p):
-			X[i,:k*p] = Y[i:(i+p),:][::-1].T.reshape([1,k*p])
-		#X = [ for i in range(N-p)]
-		self.learners = [RLS(X,Y[p:N,j],self.lamb) for j in range(k)]
-
-		self.Y = [Y[i] for i in range(N-1,N-p-1,-1)]
-		#print(self.Y)
-
-	def update(self,y):
-		#print(type(self.Y[0]))
-		# simplest nontrivial estimation of e(t)
-		#print(self.E)
-		e = y - self.predict(1)
-		#print(e)
-
-		self.E.insert(0,e)
-		self.E = self.E[:-1]
-
-		#print(self.E)
-
-		self.Y.insert(0,y)
-		self.Y = self.Y[:-1]
-
-		#print(type(self.Y[0]))
-
-	def make_column(self,data):
-		#if is_tensor(data[0],1) or is_tensor(data[0],0):
-		arr = np.concatenate([np.ravel(dat) for dat in data])
-		return arr.reshape([len(arr),1])
-		#else:
-		#	return np.concatenate(data,axis=1)
-
-	def make_block(self,data):
-		return np.concatenate(data,axis=1)
-
-	# would like to do a proper prediction here with polynomial division and everything
-	def predict(self,k,protected=True):
-		if not self.k:
-			return
-		if k == 1:
-			LSS_C = self.make_block([self.A,self.C])
-			LSS_X = self.make_column([self.Y,self.E])
-			return np.dot(LSS_C,LSS_X)
-		else:
-			# wasteful indeed but simple and correct according to book (Jakobsson2015, 8.148)
-			if protected:
-				other = copy.deepcopy(self)
-				return other.predict(k,protected=False)
-			else:
-				y = self.predict(1).T[0]
-				#print(np.shape(y))
-				self.update(y) 
-				return self.predict(k-1,protected=False)
-
-	def learn_private(self,y):
-		if self.q:
-			x = self.make_column([self.Y,self.E])
-		else:
-			x = self.make_column([self.Y])
-			#print(x.T)
-		for i in range(self.k):
-			learner = self.learners[i]
-			theta = learner.update(y[i],x.T) 
-			if self.p:
-				self.A[i,:] = theta[:self.k*self.p].T
-			if self.q:
-				self.C[i,:] = theta[self.k*self.p:].T
-		self.update(y)
-
-		return self.A,self.C
-
-	def learn(self,Y):
-		A_hist = np.zeros([1,self.k,self.k*self.p])
-		C_hist = np.zeros([1,self.k,self.k*self.q])
-		#print("tensor level: "+ str(0+(self.k>1)))
-		#print(Y)
-		if mod_aux.is_tensor(Y,0+(self.k>1)):
-			self.learn_private(Y.T)				
-		else:
-			if mod_aux.is_tensor(Y,1):
-				Y = self.make_column(Y)
-				#print(Y)
-			for y in Y:
-				A,C = self.learn_private(y.T)
-				A_hist = np.concatenate([A_hist,[A]],axis=0)
-				C_hist = np.concatenate([C_hist,[C]],axis=0)
-
-		A_hist = A_hist[1:]
-		C_hist = C_hist[1:]
-		return A_hist,C_hist
-
-	def annealing(self,data,re_series,rw_series,initiate=False):
-		k = self.k
-		p = self.p
-		q = self.q
-
-		A_hist = np.zeros([1,k,k*p])
-		C_hist = np.zeros([1,k,k*q])
-		step_length = int(len(data)/len(re_series))
-		if initiate:
-			self.initiate_kalman(re_series[0],rw_series[0])
-		i = 0
-		for re,rw in zip(re_series,rw_series):
-			for learner in self.learners:
-				learner.set_variances(re,rw)
-			A_h,C_h = self.learn(data[i*step_length:(i+1)*step_length])
-			A_hist = np.concatenate([A_hist,A_h],axis=0)
-			C_hist = np.concatenate([C_hist,C_h],axis=0)
-			i+=1
-
-		#A_hist = A_hist[1:]
-		#C_hist = C_hist[1:]
-
-		return A_hist,C_hist
-
-	def set_A_C(self,A,C):
-		self.A = A
-		self.C = C
-		for i in range(self.k):
-			learner = self.learners[i]
-			if self.k > 1:
-				A_row = A[i,:]
-				C_row = C[i,:]
-			else:
-				A_row = A
-				C_row = C
-			if self.q:
-				learner.set_X(self.make_block([A_row,C_row]))
-			else:
-				learner.set_X(A_row)
 
 class ESN(MTS_Model):
 
@@ -236,7 +79,7 @@ class ESN(MTS_Model):
     	                			hidden_layer_sizes=(5), random_state=1)
 			elif self.purpose == "CLASSIFICATION":
 				self.sv = MLPClassifier(solver='lbfgs', alpha=1e-5,
-    	                			hidden_layer_sizes=(5), random_state=1)
+    	                			hidden_layer_sizes=(8), random_state=1,max_iter=200)
 		elif self.classifier == "SVM":
 			if self.purpose == "REGRESSION":
 				self.sv = svm.SVR()
@@ -319,7 +162,7 @@ class ESN(MTS_Model):
 		elif self.selection in ["SVD_SEP"]:
 			X_pos = X[np.where(Y==1)[0],:]
 			X_neg = X[np.where(Y==0)[0],:]
-			self.Cs = mod_aux.fit_svd_sep(X_pos,X_neg,self.Oh)
+			self.Cs = mod_aux.fit_svd_sep(X_pos,X_neg,self.Oh,plot=False)
 
 		elif self.selection == "K_MEANS":
 			X_pos = X[np.where(Y==1)[0],:]
@@ -357,9 +200,21 @@ class ESN(MTS_Model):
 
 		elif self.classifier == "MLP":
 			self.sv.fit(Xs,np.ravel(Y))
-		elif self.classifier == "SVM":
+			#score = self.sv.score(Xs,np.ravel(Y))
+			#print(score)
+			
+			train_sizes,train_score,test_score = learning_curve(self.sv,Xs,np.ravel(Y))
 
-			self.sv.fit(Xs,np.ravel(Y),)
+			plt.plot(train_sizes,train_score,'b')
+			plt.plot(train_sizes,test_score,'r')
+			plt.legend(["training score"]*3+["validation score"]*3)
+			plt.xlabel("Training set size")
+			plt.ylabel("Score")
+			plt.title("Learning curve - 3 fold validation")
+			plt.show()
+			
+		elif self.classifier == "SVM":
+			self.sv.fit(Xs,np.ravel(Y))
 
 	def charge(self,U,y=[],burn_in=0):
 		self.reset()
@@ -385,7 +240,8 @@ class ESN(MTS_Model):
 			W_vec[Y_vec==1] = self.pos_w
 			self.weights.append(W_vec)
 
-		U[-1,:] = None
+		U = U[:-1,:]
+		#U[-1,:] = 0
 		self.external_inputs.append(U)
 		self.inputs.append(X_vec)
 		self.outputs.append(Y_vec)
@@ -426,6 +282,8 @@ class ESN(MTS_Model):
 		#X = X[:,self.sig_nodes]
 		#print("min: {0:.3f}, max: {1:.1f}, mean: {2:.1f}, std: {3:.3f}".format(np.min(X),np.max(X),np.mean(X),np.std(X)))
 		
+		#print(np.max(X,axis=0))
+
 		for i in range(X.shape[0]):
 			for j in range(X.shape[1]):
 				if X[i,j] < -2 or X[i,j] > 2:
@@ -442,10 +300,10 @@ class ESN(MTS_Model):
 		axarr[1].scatter(none_idx,[0]*len(none_idx),color='r',marker='*',s=20)
 		axarr[1].legend(self.explanations,loc="upper left",bbox_to_anchor=(1,1))
 
-		print(self.Cw.shape)
-		print(self.Cs.shape)
-		plt.figure()
-		plt.plot(np.dot(self.Cw[0,1:],self.Cs))
+		#print(self.Cw.shape)
+		#print(self.Cs.shape)
+		#plt.figure()
+		#plt.plot(np.dot(self.Cw[0,1:],self.Cs))
 
 		plt.show()
 
@@ -489,6 +347,11 @@ class ESN(MTS_Model):
 
 		elif self.selection in ["SVD","SVD_SEP"]:
 			Xs = np.dot(X,self.Cs.T)
+			#if mod_aux.is_tensor(Xs,int(self.M > 1)+1):
+			#	length = 10
+			#	C = np.array([1]*length)/length
+			#	A = 1
+			#	Xs = ssignal.lfilter(C,A,Xs.T).T
 
 			#Xs = np.log(np.abs(Xs)+0.000001)
 
@@ -500,7 +363,7 @@ class ESN(MTS_Model):
 					explanations += ["Principal Component {0:d}, negative data".format(i+1) for i in range(int(self.Oh/2))]
 				mod_aux.plot_variable_splits(Xs,Y,explanations,num_bins=50)
 
-			if 0: #return_score:
+			if return_score:
 				if self.selection == "SVD":
 					X_res = X - np.dot(Xs,self.Cs)
 					X_res = np.linalg.norm(X_res,axis=1)
@@ -510,26 +373,54 @@ class ESN(MTS_Model):
 
 				elif self.selection == "SVD_SEP":
 					num = int(self.Oh/2)
+					'''
 					Cs_pos = self.Cs[:num,:]
 					Cs_neg = self.Cs[num:,:]
 
-					X_res_pos = X - np.dot(np.dot(X,Cs_pos.T),Cs_pos)
-					X_res_neg = X - np.dot(np.dot(X,Cs_neg.T),Cs_neg)
+					X_res_pos = np.dot(np.dot(X,Cs_pos.T),Cs_pos)
+					X_res_neg = np.dot(np.dot(X,Cs_neg.T),Cs_neg)
 
 					X_res_pos = np.linalg.norm(X_res_pos,axis=1)
-					X_res_pos = X_res_pos/np.linalg.norm(X,axis=1)
+					#X_res_pos = X_res_pos/np.linalg.norm(X,axis=1)
 
 					X_res_neg = np.linalg.norm(X_res_neg,axis=1)
-					X_res_neg = X_res_neg/np.linalg.norm(X,axis=1)
+					#X_res_neg = X_res_neg/np.linalg.norm(X,axis=1)
+					'''
+					X_res_pos = Xs[:,:num]
+					X_res_neg = Xs[:,num:]
+					#X_res_pos = np.linalg.norm(X_res_pos,axis=1)
+					#X_res_neg = np.linalg.norm(X_res_neg,axis=1)
+					f,axarr = plt.subplots(2,sharex = True)
+					axarr[0].plot(Y*20,'r')
+					#plt.plot(np.linalg.norm(X,axis=1))
+					axarr[0].plot(X_res_pos)
+					axarr[0].plot(X_res_neg)
+					#legends = ["Ground Truth","Norm of activations","Norm of projection on 'positive' subspace", "Norm of projection on 'negative' subspace"]
+					legends = ["Ground Truth"]#+["Norm of projection on 'positive' subspace", "Norm of projection on 'negative' subspace"]
+					axarr[0].legend(legends,loc=2)
+					axarr[0].set_xlabel("Time sample no.")
+					axarr[0].set_ylabel("Principal component projection value")
+					axarr[0].set_title("Reduced features over time")
 
-					plt.plot(X_res_pos,'g')
-					plt.plot(X_res_neg,'m')
-					legends = ["Relative projection loss on 'positive' subspace", "Relative projection loss on 'negative' subspace"]
+					#num = int(self.M/2)
+					num = self.M
+					U = np.concatenate(self.external_inputs,axis=0)
 
-				plt.plot(Y,'r')
+					axarr[1].plot(U[:,:num])
+					axarr[1].set_xlabel("Time sample no.")
+					axarr[1].set_ylabel("Normalized value")
+					axarr[1].set_title("Input features")
+					axarr[1].legend(self.explanations[:num],loc=2)
 
-				legends += ["Ground truth"]
-				plt.legend(legends)
+					#axarr[2].plot(U[:,num:])
+					#axarr[2].set_xlabel("Time sample no.")
+					#axarr[2].set_ylabel("Normalized value")
+					#axarr[2].legend(self.explanations[num:],loc=2)
+
+
+				#plt.plot(Y,'r')
+
+				#legends += ["Ground truth"]
 				plt.show()
 
 		elif self.selection == "K_MEANS":
@@ -580,7 +471,12 @@ class ESN(MTS_Model):
 		if self.classifier == "LINEAR":
 			Xs = np.concatenate([np.array([[1]]),Xs])
 			y = np.dot(self.Cw,Xs)
-		elif self.classifier in ["MLP","SVM"]:
+		elif self.classifier in ["MLP"]:
+			#y = self.sv.predict(Xs.T)
+			y = self.sv.predict_proba(Xs.T)
+			y = y[:,1]
+		elif self.classifier in ["SVM"]:
+			#y = self.sv.predict(Xs.T)
 			y = self.sv.predict(Xs.T)
 
 		return y
@@ -600,7 +496,7 @@ class ESN(MTS_Model):
 					y.append(self.out())
 				y = np.concatenate(y,axis=0)
 				if self.purpose == "CLASSIFICATION":
-					y = y > 0.5
+					pass #y = y > 0.5
 		elif self.purpose == "PREDICTION":
 			X = self.X
 			for i in range(k-1):
@@ -668,6 +564,7 @@ class SVM_TS:
 
 class MLP_TS:
 	def __init__(self,M,purpose):
+		self.M = M
 		self.purpose = purpose
 		self.initiate()
 
@@ -696,8 +593,21 @@ class MLP_TS:
 		self.sv.fit(self.X,np.ravel(self.y))
 		#else:
 		#	self.sv.fit(self.X,np.ravel(self.y))
+
+		Y = np.ravel(self.y)
+		train_sizes,train_score,test_score = learning_curve(self.sv,self.X,Y)
+
+		plt.plot(train_sizes,train_score,'b')
+		plt.plot(train_sizes,test_score,'r')
+		plt.legend(["training score"]*3+["test score"]*3)
+		plt.xlabel("Training set size")
+		plt.ylabel("Score")
+		plt.title("Learning curve")
+		plt.show()
+
 		if return_score:
 			return self.sv.score(self.X,np.ravel(self.y))
 
 	def predict(self,U):
-		return self.sv.predict(U)
+		Y = self.sv.predict_proba(U)
+		return Y[:,1] > 0.5

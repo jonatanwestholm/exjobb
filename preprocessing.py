@@ -118,11 +118,25 @@ def normalize_ref(dat,dat_mean,dat_max):
 	return np.array([(feat - feat_mean)/feat_max for feat,feat_mean,feat_max in zip(dat.T,dat_mean,dat_max)]).T	
 	#return np.array([(feat - 0)/feat_max for feat,feat_mean,feat_max in zip(dat.T,dat_mean,dat_max)]).T	
 
-def normalize_all(data,leave_zero=False):
-	__,dat_mean,dat_max = normalize(np.concatenate(data,axis=0),return_mean_max=True,leave_zero=leave_zero)
+def normalize_all(data,leave_zero=False,mean_def=None):
+	if mean_def is not None:
+		dat_mean = [mean_def for i in range(len(data))]
+		dat_max = [1 for i in range(data[0].shape[1])]
+		data = [normalize_ref(dat,dat_mean,dat_max) for dat in data]
+		__,dat_mean,dat_max = normalize(np.concatenate(data,axis=0),return_mean_max=True,leave_zero=leave_zero)
+		#print(dat_mean)
+		#print(dat_max)
+		dat_mean = [0 for i in range(data[0].shape[1])]
+	else:
+		__,dat_mean,dat_max = normalize(np.concatenate(data,axis=0),return_mean_max=True,leave_zero=leave_zero)
+	
 	#print(dat_mean)
 	#print(dat_max)
-	return [normalize_ref(dat,dat_mean,dat_max) for dat in data]
+	data = [normalize_ref(dat,dat_mean,dat_max) for dat in data]
+	#__,dat_mean,dat_max = normalize(np.concatenate(data,axis=0),return_mean_max=True,leave_zero=leave_zero)
+	#print(dat_mean)
+	#print(dat_max)
+	return data
 
 #def only_numeric(data):	
 #	first_row = data[0][0,:]

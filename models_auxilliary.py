@@ -367,7 +367,7 @@ def ESN_f(architecture,thres=0):
 	elif architecture == "POSLIN":
 		f = lambda x: (x>thres)*(x-thres)
 	elif architecture == 'POSNEG_LIN':
-		f = lambda x: (x>thres)*x
+		f = lambda x: (x>thres)*x*0.001
 	elif architecture == "DOUBLE_POSLIN":
 		f = lambda x: (np.abs(x)>thres)*x + (np.abs(x)<=thres)*thres
 	elif architecture == "THRES":
@@ -434,9 +434,9 @@ def make_trigger(M, N, direct_input, random_thres, turn_on):
 def make_expdelay(M, N, order, direct_input):
 	size = order*N
 	A2A = np.eye(size)
-	B2A = np.diag(0.5*np.ones(size-N),-N)
+	B2A = np.diag(500*np.ones(size-N),-N)
 	for i in range(size):
-		B2A[i,i] = -1
+		B2A[i,i] = -1000
 	C2A = np.zeros([size,size])
 
 	A2B = np.eye(size)
@@ -838,6 +838,8 @@ class Reservoir:
 				else:
 					weight = 0.5
 				for source,target in zip(selected_sources,selected_targets):
+					sgn = (np.random.random() > 0.5)*2 - 1
+					weight *= sgn
 					source.set_output(target,weight)
 					target.set_input(source,weight)
 

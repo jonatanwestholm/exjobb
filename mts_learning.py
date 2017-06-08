@@ -143,7 +143,12 @@ def test(test_data,model,args):
 	pred = []
 	for test_dat in test_data:
 		model.reset()
-		pred.append(model.predict(U=test_dat))
+		P = model.predict(U=test_dat)
+		if args.model == "ESN" and args.dataset in ["BACKBLAZE"]:
+			burn_in = args.settings["ESN_burn_in"]
+			P[:burn_in] = 0
+		pred.append(P)
+
 
 	return pred
 
@@ -256,18 +261,18 @@ def main(args):
 	
 	args.train_names = train_names
 	args.test_names = test_names
-	print(len(train_data))
+	#print(len(train_data))
 
-	#probe_data,probe_gt = fetch(args,"PROBE",data[0].shape[1])
+	probe_data,probe_gt = fetch(args,"PROBE",data[0].shape[1])
 	#print(len(probe_data))
 	#print(probe_data[0])
 
 	print("Training")
 	model = train(train_data,train_gt,args.model,args)
-	test_model(model,test_data,test_gt,args)
+	#test_model(model,test_data,test_gt,args)
 
-	#args.test_names = args.explanations
-	#test_model(model,probe_data,probe_gt,args)
+	args.test_names = args.explanations
+	test_model(model,probe_data,probe_gt,args)
 
 
 

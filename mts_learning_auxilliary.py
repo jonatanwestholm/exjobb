@@ -312,18 +312,28 @@ def classification_plot(test_data,pred,gt,names,dataset,model):
 		pred_arr = pp.filter([pred_arr],np.array([1]*length)/length,np.array([1]))[0]
 		#print(pred_arr)
 
+		if 0: #dataset in ["BACKBLAZE"]:
+			x = sorted(list(range(-len(pred_arr),0)))
+		else:
+			x = list(range(len(pred_arr)))
+
 		plt.figure()
 		if dataset in ["DODGERS"]:
-			plt.plot(test_dat[:,0],'g')
-		plt.plot(pred_arr,'b')
-		plt.plot(gt_arr,'r')
-		#plt.title("Dataset: {0:s}. Unit: {1:s}. Model: {2:s}".format(dataset,name,model))
+			plt.plot(x,test_dat[:,0],'g')
+
+		plt.plot(x,pred_arr,'b')
+		plt.plot(x,gt_arr,'r')
+		plt.title("Dataset: {0:s}. Unit: {1:s}. Model: {2:s}".format(dataset,name,model))
 		plt.title("Response: {0:s}".format(name))
-		plt.axis([0,len(pred_arr), min(gt_arr)-0.1,max(gt_arr)+0.1])
+		if 0: #dataset in ["BACKBLAZE"]:
+			plt.axis([-len(pred_arr),0, min(gt_arr)-0.1,max(gt_arr)+0.1])
+		else:
+			plt.axis([0,len(pred_arr), min(gt_arr)-0.1,max(gt_arr)+0.1])
 		if dataset in ["DODGERS"]:
 			plt.legend(["Input","Predicted","Ground Truth"])
 		else:
 			plt.legend(["Response","Input"],loc='best')
+		#plt.xlabel("Days before failure")
 		plt.xlabel("Sample no. (time)")
 		plt.ylabel("Value")
 	plt.show()
@@ -366,16 +376,20 @@ def interval_hits(P,G):
 	return total/len(intervals)
 
 def burn_down_graph(pred,thres):
+	thres = [0]+thres
 	N = len(pred)
 	for th in thres:
 		warning_times = []
 		for P in pred:
-			C = np.array([1]*th)/th
-			P = ssignal.lfilter(C,1,P.T).T
-			try:
-				warning_times.append(np.min(np.where(P==1)[0])-len(P))
-			except ValueError:
-				warning_times.append(-1)
+			if th:
+				C = np.array([1]*th)/th
+				P = ssignal.lfilter(C,1,P.T).T
+				try:
+					warning_times.append(np.min(np.where(P==1)[0])-len(P))
+				except ValueError:
+					warning_times.append(-1)
+			else:
+				warning_times.append(-len(P))
 
 		warning_times = sorted(warning_times)
 		print(warning_times)
@@ -396,7 +410,7 @@ def burn_down_graph(pred,thres):
 	plt.xlabel("Days before failure")
 	plt.ylabel("Share of units that have had warning")
 	plt.title("Warning accuracy")
-	plt.legend(["{0:d} in a row".format(th) for th in thres],loc=2)
+	plt.legend(["Data availability"]+["{0:d} in a row".format(th) for th in thres[1:]],loc=2)
 	plt.show()
 
 
