@@ -79,7 +79,7 @@ class ESN(MTS_Model):
     	                			hidden_layer_sizes=(5), random_state=1)
 			elif self.purpose == "CLASSIFICATION":
 				self.sv = MLPClassifier(solver='lbfgs', alpha=1e-5,
-    	                			hidden_layer_sizes=(8), random_state=1,max_iter=200)
+    	                			hidden_layer_sizes=(5), random_state=1,max_iter=200)
 		elif self.classifier == "SVM":
 			if self.purpose == "REGRESSION":
 				self.sv = svm.SVR()
@@ -207,7 +207,7 @@ class ESN(MTS_Model):
 
 			plt.plot(train_sizes,train_score,'b')
 			plt.plot(train_sizes,test_score,'r')
-			plt.legend(["training score"]*3+["validation score"]*3)
+			plt.legend(["training score"]*3+["validation score"]*3,loc=3)
 			plt.xlabel("Training set size")
 			plt.ylabel("Score")
 			plt.title("Learning curve - 3 fold validation")
@@ -271,7 +271,7 @@ class ESN(MTS_Model):
 			self.train_Cw(Xs,Y,W=W)
 
 		#mod_aux.print_mat(X.T)
-		#self.plot_activations()
+		self.plot_activations()
 		#self.plot_activations_reference_times()
 		#self.plot_activations_single_nodes(10)
 		return X_res
@@ -284,21 +284,26 @@ class ESN(MTS_Model):
 		
 		#print(np.max(X,axis=0))
 
-		for i in range(X.shape[0]):
-			for j in range(X.shape[1]):
-				if X[i,j] < -2 or X[i,j] > 2:
-					X[i,j] *= 2/np.abs(X[i,j])
+		#for i in range(X.shape[0]):
+		#	for j in range(X.shape[1]):
+		#		if X[i,j] < -2 or X[i,j] > 2:
+		#			X[i,j] *= 2/np.abs(X[i,j])
 		
 		f,axarr = plt.subplots(2,sharex = True)
 		axarr[0].imshow(X.T,interpolation='none')
-		#axarr[0].title("Node activations")
+		axarr[0].set_title("Node activations")
+		axarr[0].set_ylabel("Node number")
+
 		for i in range(self.M):
 			u = U[:,i]
 			none_idx = np.where(np.isnan(u))[0]
 			axarr[1].plot(U[:,i])
-		
+
 		axarr[1].scatter(none_idx,[0]*len(none_idx),color='r',marker='*',s=20)
-		axarr[1].legend(self.explanations,loc="upper left",bbox_to_anchor=(1,1))
+		#axarr[1].legend(self.explanations,loc="upper left",bbox_to_anchor=(1,1))
+		axarr[1].legend(["Input"])
+		axarr[1].set_xlabel("Sample no. (time)")
+		axarr[1].set_ylabel("Value")
 
 		#print(self.Cw.shape)
 		#print(self.Cs.shape)
@@ -390,7 +395,7 @@ class ESN(MTS_Model):
 					X_res_neg = Xs[:,num:]
 					#X_res_pos = np.linalg.norm(X_res_pos,axis=1)
 					#X_res_neg = np.linalg.norm(X_res_neg,axis=1)
-					f,axarr = plt.subplots(2,sharex = True)
+					f,axarr = plt.subplots(3,sharex = True)
 					axarr[0].plot(Y*20,'r')
 					#plt.plot(np.linalg.norm(X,axis=1))
 					axarr[0].plot(X_res_pos)
@@ -402,8 +407,8 @@ class ESN(MTS_Model):
 					axarr[0].set_ylabel("Principal component projection value")
 					axarr[0].set_title("Reduced features over time")
 
-					#num = int(self.M/2)
-					num = self.M
+					num = int(self.M/2)
+					#num = self.M
 					U = np.concatenate(self.external_inputs,axis=0)
 
 					axarr[1].plot(U[:,:num])
@@ -412,10 +417,10 @@ class ESN(MTS_Model):
 					axarr[1].set_title("Input features")
 					axarr[1].legend(self.explanations[:num],loc=2)
 
-					#axarr[2].plot(U[:,num:])
-					#axarr[2].set_xlabel("Time sample no.")
-					#axarr[2].set_ylabel("Normalized value")
-					#axarr[2].legend(self.explanations[num:],loc=2)
+					axarr[2].plot(U[:,num:])
+					axarr[2].set_xlabel("Time sample no.")
+					axarr[2].set_ylabel("Normalized value")
+					axarr[2].legend(self.explanations[num:],loc=2)
 
 
 				#plt.plot(Y,'r')
@@ -496,7 +501,7 @@ class ESN(MTS_Model):
 					y.append(self.out())
 				y = np.concatenate(y,axis=0)
 				if self.purpose == "CLASSIFICATION":
-					pass #y = y > 0.5
+					y = y > 0.5
 		elif self.purpose == "PREDICTION":
 			X = self.X
 			for i in range(k-1):
@@ -611,3 +616,15 @@ class MLP_TS:
 	def predict(self,U):
 		Y = self.sv.predict_proba(U)
 		return Y[:,1] > 0.5
+
+class RANDOM_TS:
+	def __init__(self):
+		self.p = 1/800
+
+	def reset(self):
+		pass
+
+	def predict(self,U):
+		N = len(U)
+		y = np.random.random([N,1]) < self.p
+		return y

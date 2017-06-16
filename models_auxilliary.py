@@ -220,6 +220,7 @@ def cumulative_singular_values(S,plot=False):
 	S_energy = S_energy#/S_energy[-1]
 	if plot:
 		plt.plot(S_energy)
+		plt.plot([0.1]*len(S_energy))
 		plt.title("Cumulative singular values")
 		plt.xlabel("Singular value")
 		plt.ylabel("Cumulative relative singular values")
@@ -367,7 +368,7 @@ def ESN_f(architecture,thres=0):
 	elif architecture == "POSLIN":
 		f = lambda x: (x>thres)*(x-thres)
 	elif architecture == 'POSNEG_LIN':
-		f = lambda x: (x>thres)*x*0.001
+		f = lambda x: (x>thres)*x
 	elif architecture == "DOUBLE_POSLIN":
 		f = lambda x: (np.abs(x)>thres)*x + (np.abs(x)<=thres)*thres
 	elif architecture == "THRES":
@@ -434,9 +435,9 @@ def make_trigger(M, N, direct_input, random_thres, turn_on):
 def make_expdelay(M, N, order, direct_input):
 	size = order*N
 	A2A = np.eye(size)
-	B2A = np.diag(500*np.ones(size-N),-N)
+	B2A = np.diag(0.5*np.ones(size-N),-N)
 	for i in range(size):
-		B2A[i,i] = -1000
+		B2A[i,i] = -0.5
 	C2A = np.zeros([size,size])
 
 	A2B = np.eye(size)
@@ -460,7 +461,7 @@ def make_expdelay(M, N, order, direct_input):
 	if not direct_input:
 		B[:N,:] = 0
 
-	f = [ESN_f("LIN"),ESN_f("POSNEG_LIN",-TH*eps)]+[ESN_f("COUNTER",2**i) for i in range(1,order+1)]
+	f = [ESN_f("LIN"),ESN_f("POSNEG_LIN",-TH*eps)]+[ESN_f("COUNTER",2**i) for i in range(1,order+1)]#+[ESN_f("LIN")]
 
 	return A,B,f
 
@@ -724,7 +725,7 @@ class EXPDELAY(Component):
 	def get_index_groups(self):
 		start = self.input_idx
 		N = self.number*self.order
-		return [(start+0*N,start+1*N),(start+1*N,start+2*N)]+[(i,i+self.number) for i in range(start+2*N,start+3*N,self.number)]
+		return [(start+0*N,start+1*N),(start+1*N,start+2*N)]+[(i,i+self.number) for i in range(start+2*N,start+3*N,self.number)]#+[(start+3*N,start+4*N)]
 
 	def get_input_nodes(self):
 		return self.nodes[:self.number]
@@ -838,8 +839,8 @@ class Reservoir:
 				else:
 					weight = 0.5
 				for source,target in zip(selected_sources,selected_targets):
-					sgn = (np.random.random() > 0.5)*2 - 1
-					weight *= sgn
+					#sgn = (np.random.random() > 0.5)*2 - 1
+					#weight *= sgn
 					source.set_output(target,weight)
 					target.set_input(source,weight)
 

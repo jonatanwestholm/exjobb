@@ -133,6 +133,8 @@ def train(train_data,train_gt,train_type,args):
 		for x,y in zip(train_data,train_gt):
 			mod.charge(x,y)
 		mod.train()
+	elif train_type == "RANDOM":
+		mod = Models.RANDOM_TS()
 
 	return mod
 
@@ -263,16 +265,16 @@ def main(args):
 	args.test_names = test_names
 	#print(len(train_data))
 
-	probe_data,probe_gt = fetch(args,"PROBE",data[0].shape[1])
+	#probe_data,probe_gt = fetch(args,"PROBE",data[0].shape[1])
 	#print(len(probe_data))
 	#print(probe_data[0])
 
 	print("Training")
 	model = train(train_data,train_gt,args.model,args)
-	#test_model(model,test_data,test_gt,args)
+	test_model(model,test_data,test_gt,args)
 
-	args.test_names = args.explanations
-	test_model(model,probe_data,probe_gt,args)
+	#args.test_names = args.explanations
+	#test_model(model,probe_data,probe_gt,args)
 
 
 

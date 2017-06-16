@@ -14,7 +14,7 @@ import smart_explanations
 import preprocessing as pp
 
 BB_SMART_order = [1,2,3,4,5,7,8,9,10,11,12,13,15,22,183,184,187,188,189,190,191,192,193,194,195,196,197,198,199,200,201,220,222,223,224,225,226,240,241,242,250,251,252,254,255]
-normalized_idx = list(range(5,95,2))
+normalized_idx = list(range(6,95,2))
 critical_SMART = [5,187,188,197,198]
 fail_location = 4 # column where failure is reported
 
@@ -38,7 +38,7 @@ def all_smart_except(remove):
 def smart_expl(idx):
 	try:
 		key = BB_SMART_order[idx]
-		expl = "{0:d}: {1:s}".format(key,smart_explanations.smart[BB_SMART_order[idx]])
+		expl = "{0:s} ".format(smart_explanations.smart[BB_SMART_order[idx]])
 	except KeyError:
 		expl = "S.M.A.R.T feature " + str(BB_SMART_order[idx])
 	return key,expl
@@ -126,6 +126,98 @@ def product_failures(args,filename):
 								"Failed: {0:d}".format(failed).ljust(15,' ')+
 								"Share: {0:.2f}".format(share).ljust(15,' '))
 
+def plot_featurewise(data,names):
+	max_length = max(map(lambda x: np.shape(x)[0],data))
+	x_range = list(range(-max_length+1,1))
+
+	i = 0
+	for x in range(data[0].shape[1]):
+		plotted = False
+		
+		for dat,name in zip(data,names):
+			#print(dat)
+			#if i == 45:
+			#	print("xx" + dat[0,x] + "xx")
+			if np.isnan(dat[0,x]):
+				#print('empty feature at {0:d}'.format(x))
+				continue
+			else:
+				if not plotted:
+					plt.figure()
+					plt.xlabel('Days before failure (red) or end of measurement (blue)')
+					try:
+						plt.title("S.M.A.R.T feature {0:d}: {1:s}".format(BB_SMART_order[i],smart_expl(i)[1]))
+					except IndexError:
+						plt.title("Plot {0:d}".format(i))
+					except KeyError:
+						plt.title("S.M.A.R.T feature {0:d}".format(BB_SMART_order[i]))
+					plotted = True
+			#y = input('Which feature do you want to look at? ')
+			#y = int(y)
+
+			#for y in range(10):
+			#plt.plot(filter_wrt(data,0,y)[:,x])
+			pad = max_length - np.size(dat[:,x])
+			dat_ext = np.concatenate((np.nan*np.ones(pad),dat[:,x]))
+			if re.findall("_fail",name):
+				plt.plot(x_range,dat_ext,'r',linewidth=5)
+			else:	
+				#print(filename)
+				#print(re.match("_fail",filename))
+				plt.plot(x_range,dat_ext,'b--')		
+
+		if not plotted:
+			print("nothing to plot for {0:d}".format(i))
+			#plt.close()
+		i += 1
+	plt.show()
+
+def plot_unitwise(data,names):
+	for dat,name in zip(data,names):
+		legends = []
+		plt.figure()
+		for x in range(data[0].shape[1]):
+			'''
+			if np.isnan(dat[0,x]):
+				#print('empty feature at {0:d}'.format(x))
+				continue
+			else:
+				if not plotted:
+					plt.figure()
+					plt.xlabel('Days before failure (red) or end of measurement (blue)')
+					try:
+						plt.title("S.M.A.R.T feature {0:d}: {1:s}".format(BB_SMART_order[i],smart_expl(i)[1]))
+					except IndexError:
+						plt.title("Plot {0:d}".format(i))
+					except KeyError:
+						plt.title("S.M.A.R.T feature {0:d}".format(BB_SMART_order[i]))
+					plotted = True
+			'''
+			#y = input('Which feature do you want to look at? ')
+			#y = int(y)
+
+			#for y in range(10):
+			#plt.plot(filter_wrt(data,0,y)[:,x])
+			#pad = max_length - np.size(dat[:,x])
+			#dat_ext = np.concatenate((np.nan*np.ones(pad),dat[:,x]))
+			#if re.findall("_fail",name):
+			#	plt.plot(x_range,dat_ext,'r',linewidth=5)
+			#else:	
+			#print(filename)
+			#print(re.match("_fail",filename))
+			#plt.plot(x_range,dat_ext)		
+
+			if np.isnan(dat[0,x]):
+				continue
+			
+			if x in all_smart_except([1,240]):
+				legends.append(smart_expl(x))
+				plt.plot(list(range(-len(dat[:,0]),0)),dat[:,x])
+
+		plt.legend(legends,loc=2)
+		
+	plt.show()
+
 def main(args):
 	filename = args.filename
 	datatype = args.datatype
@@ -155,9 +247,6 @@ def main(args):
 			qualified = BB_SMART_order
 			#data,__ = remove_caught_failures(data,names,qualified)
 
-			max_length = max(map(lambda x: np.shape(x)[0],data))
-
-			x_range = list(range(-max_length+1,1))
 			#print(max_length)
 			#return
 
@@ -166,47 +255,10 @@ def main(args):
 			#while True:
 			#	x = input('Which feature do you want to look at? ')
 			#	x = int(x)
-			i = 0
-			for x in range(data[0].shape[1]):
-				plotted = False
-				
-				for dat,filename in zip(data,filenames):
-					#print(dat)
-					#if i == 45:
-					#	print("xx" + dat[0,x] + "xx")
-					if np.isnan(dat[0,x]):
-						#print('empty feature at {0:d}'.format(x))
-						continue
-					else:
-						if not plotted:
-							plt.figure()
-							plt.xlabel('Days before failure (red) or end of measurement (blue)')
-							try:
-								plt.title("S.M.A.R.T feature {0:d}: {1:s}".format(BB_SMART_order[i],smart_expl(i)[1]))
-							except IndexError:
-								plt.title("Plot {0:d}".format(i))
-							except KeyError:
-								plt.title("S.M.A.R.T feature {0:d}".format(BB_SMART_order[i]))
-							plotted = True
-					#y = input('Which feature do you want to look at? ')
-					#y = int(y)
-
-					#for y in range(10):
-					#plt.plot(filter_wrt(data,0,y)[:,x])
-					pad = max_length - np.size(dat[:,x])
-					dat_ext = np.concatenate((np.nan*np.ones(pad),dat[:,x]))
-					if re.findall("_fail",filename):
-						plt.plot(x_range,dat_ext,'r',linewidth=5)
-					else:	
-						#print(filename)
-						#print(re.match("_fail",filename))
-						plt.plot(x_range,dat_ext,'b--')		
-
-				if not plotted:
-					print("nothing to plot for {0:d}".format(i))
-					#plt.close()
-				i += 1
-			plt.show()
+			data = pp.normalize_all(data,leave_zero=True)
+			#plot_featurewise(data,names)
+			plot_unitwise(data,names)
+			
 
 		else:
 
@@ -215,7 +267,7 @@ def main(args):
 			data = [dat[:,normalized_idx] for dat in data]
 			dead_rows(data,names)
 
-			idxs = set(all_smart_except([194]))
+			idxs = set(all_smart_except([194,5,187,188,197,198]))
 			print(idxs)
 			#print(set(pp.numeric_idxs(data)))
 			idxs = set.intersection(idxs,set(pp.numeric_idxs(data)))
@@ -268,10 +320,10 @@ def main(args):
 			else:
 				pass
 				#data = pp.differentiate(data)
-				#sdata = pp.smooth(data,5)
+				#data = pp.smooth(data,10)
 				#data = pp.filter(data,np.array([1]),np.array([1,-0.8]))
 
-			data = pp.normalize_all(data,leave_zero=True,mean_def=100)
+			data = pp.normalize_all(data,leave_zero=True,mean_def=0)
 			#print(explanations)
 			#print(keys)
 			print("Explanations " + " ".join(["{0:s}: {1:s}".format(str(key),str(explanation)) for key, explanation in zip(keys,explanations)]))

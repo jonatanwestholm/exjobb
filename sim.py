@@ -240,8 +240,8 @@ def esn_sim(T,case,M=0):
 	elif case == "step":
 		y = np.ones([T,1])	
 	elif case == "noise":
-		#y = np.random.normal(0,1,[T,1])
-		y = arma_sim(np.ones([10,])/10,1,T,1).T
+		y = np.random.normal(0,1,[T,1])
+		#y = arma_sim(np.ones([10,])/10,1,T,1).T
 
 	gt = np.zeros([T,1])
 	gt[switch_time:] = 1

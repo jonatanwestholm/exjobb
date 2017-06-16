@@ -26,77 +26,77 @@ def neutralize_outliers(dat):
 
 def main(args):
 	filename = args.filename
-	datatype = args.datatype
+	#datatype = args.datatype
 
-	if datatype == "SEQUENTIAL":
-		#pattern = 'PL1331LAGLX6PH.csv'
-		pattern = args.pattern
+	#if datatype == "SEQUENTIAL":
+	#pattern = 'PL1331LAGLX6PH.csv'
+	pattern = args.pattern
 
-		filenames = glob.glob(filename+pattern)
-		filenames = sorted(filenames,reverse=True)
-		names = just_the_names(filenames)
-		#print(filename+pattern)
-		#print(sorted(filenames,reverse=False))
-		print(names)
+	filenames = glob.glob(filename+pattern)
+	filenames = sorted(filenames,reverse=True)
+	names = just_the_names(filenames)
+	#print(filename+pattern)
+	#print(sorted(filenames,reverse=False))
+	print(names)
 
-		feature_idxs = [0,1,2,3,4,5,6,7,8,9,10,11,12,13]
-		#feature_idxs = [0,2,11,13]
-		gt_idx = [14]
+	feature_idxs = [0,1,2,3,4,5,6,7,8,9,10,11,12,13]
+	#feature_idxs = [0,2,11,13]
+	gt_idx = [14]
 
-		data = [pp.read_file(filename,elemsep=args.elemsep,linesep=args.linesep,readlines=args.readlines) for filename in sorted(filenames,reverse=True)]
-		for dat in data:
-			dat.remove([])
+	data = [pp.read_file(filename,elemsep=args.elemsep,linesep=args.linesep,readlines=args.readlines) for filename in sorted(filenames,reverse=True)]
+	for dat in data:
+		dat.remove([])
 
-		data = [np.array(dat) for dat in data]
-		#data = [dat[1:,:] for dat in data]
-		data = [neutralize_outliers(dat) for dat in data]
+	data = [np.array(dat) for dat in data]
+	#data = [dat[1:,:] for dat in data]
+	data = [neutralize_outliers(dat) for dat in data]
 
-		'''
-		gt = [dat[:,gt_idx] for dat in data]
-		data = [dat[:,feature_idxs] for dat in data]	
-		data = pp.normalize_all(data,leave_zero=True)
+	'''
+	gt = [dat[:,gt_idx] for dat in data]
+	data = [dat[:,feature_idxs] for dat in data]	
+	data = pp.normalize_all(data,leave_zero=True)
 
-		x = np.linspace(0,117,14980)
-		print(x.shape)
-		for dat in data:
-			print(dat.shape)
-			plt.figure()
-			for feat in feature_idxs:
-				plt.plot(x,dat[:,feat])
-			plt.plot(x,gt[0]*5,'b')
+	x = np.linspace(0,117,14980)
+	print(x.shape)
+	for dat in data:
+		print(dat.shape)
+		plt.figure()
+		for feat in feature_idxs:
+			plt.plot(x,dat[:,feat])
+		plt.plot(x,gt[0]*5,'b')
 
-		plt.xlabel('time / s')
-		plt.ylabel('Normalized EEG value')
-		plt.title('EEG Eye Features')
-		plt.legend(explanations+["Ground Truth"])
-		plt.show()
-		'''
+	plt.xlabel('time / s')
+	plt.ylabel('Normalized EEG value')
+	plt.title('EEG Eye Features')
+	plt.legend(explanations+["Ground Truth"])
+	plt.show()
+	'''
 
-		'''
-		data = pp.normalize_all(data,leave_zero=True)	
-		
-		for dat in data:
-			plt.figure()
-			for feat in feature_idxs:
-				plt.plot(dat[:,feat])
-			gt_array = dat[:,gt_idx]
-			gt_array = gt_array - min(gt_array)
-			gt_array = gt_array/max(gt_array)
-			plt.plot(gt_array)
-			plt.title("Occupancy and predictors")
-			plt.xlabel("Sample no. (time)")
-			plt.ylabel("Value (normalized)")
-			plt.legend(explanations+["occupancy"])
+	'''
+	data = pp.normalize_all(data,leave_zero=True)	
+	
+	for dat in data:
+		plt.figure()
+		for feat in feature_idxs:
+			plt.plot(dat[:,feat])
+		gt_array = dat[:,gt_idx]
+		gt_array = gt_array - min(gt_array)
+		gt_array = gt_array/max(gt_array)
+		plt.plot(gt_array)
+		plt.title("Occupancy and predictors")
+		plt.xlabel("Sample no. (time)")
+		plt.ylabel("Value (normalized)")
+		plt.legend(explanations+["occupancy"])
 
-		plt.show()
-		'''
+	plt.show()
+	'''
 
-		gt = [dat[:,gt_idx] for dat in data]
-		data = [dat[:,feature_idxs] for dat in data]	
+	gt = [dat[:,gt_idx] for dat in data]
+	data = [dat[:,feature_idxs] for dat in data]	
 
-		data = pp.normalize_all(data,leave_zero=True)	
+	data = pp.normalize_all(data,leave_zero=True)	
 
-		return data,gt,explanations,names
+	return data,gt,explanations,names
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
